@@ -72,8 +72,7 @@ func main() {
 
 	// Initialize and load the Vault configuration file
 	var encData encryptionData
-	encData.BoltDB = *vaultConfigFilePath
-	err := encData.loadConfig()
+	err := encData.loadConfig(*vaultConfigFilePath)
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}

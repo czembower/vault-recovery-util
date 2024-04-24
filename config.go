@@ -9,8 +9,8 @@ import (
 	"github.com/hashicorp/vault/internalshared/configutil"
 )
 
-func (e *encryptionData) loadConfig() error {
-	file, err := os.ReadFile(e.BoltDB)
+func (e *encryptionData) loadConfig(vaultConfigFile string) error {
+	file, err := os.ReadFile(vaultConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to locate Vault configuration file: %v", err)
 	}
@@ -73,5 +73,6 @@ func (e *encryptionData) loadConfig() error {
 
 	fmt.Println("successfully loaded Vault server configuration")
 	fmt.Println("seal type:", sealConfig.Type)
+	fmt.Println("boltdb path:", e.BoltDB)
 	return nil
 }
