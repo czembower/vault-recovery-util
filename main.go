@@ -35,6 +35,10 @@ type sealConfig struct {
 	MountPath     string `json:"mount_path"`
 	TlsSkipVerify bool   `json:"ssl_skip_verify"`
 	Token         string `json:"token"`
+	Project       string `json:"project"`
+	Region        string `json:"region"`
+	KeyRing       string `json:"key_ring"`
+	CryptoKey     string `json:"crypto_key"`
 }
 
 type encryptionData struct {

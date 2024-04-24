@@ -57,6 +57,11 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 				return fmt.Errorf("no Vault token for transit engine in environment variables or provided Vault config")
 			}
 		}
+	} else if seal.Type == "gcpckms" {
+		sealConfig.Project = seal.Config["project"]
+		sealConfig.Region = seal.Config["region"]
+		sealConfig.KeyRing = seal.Config["key_ring"]
+		sealConfig.CryptoKey = seal.Config["crypto_key"]
 	}
 	e.SealConfig = sealConfig
 
@@ -71,7 +76,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 		return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")
 	}
 
-	fmt.Println("seal type:", e.SealConfig.Type)
 	fmt.Println("successfully loaded Vault server configuration")
+	fmt.Println("seal type:", e.SealConfig.Type)
 	return nil
 }
