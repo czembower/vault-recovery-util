@@ -20,7 +20,6 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse Vault server configuration file: %v", err)
 	}
-	fmt.Println("successfully loaded Vault server configuration")
 
 	// Identity seal type and set config
 	// Vault supports multuple seal configurations, but this tool does not so we
@@ -59,22 +58,22 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 				return fmt.Errorf("no Vault token for transit engine in environment variables or provided Vault config")
 			}
 		}
-
-		if config.Storage == nil {
-			return fmt.Errorf("no storage stanza found in Vault configuration file")
-		}
-		storageConfig := config.Storage.Config
-
-		if val, ok := storageConfig["path"]; ok {
-			e.BoltDB = val + "/vault.db"
-			fmt.Println("found storage path:", val)
-		} else {
-			return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")
-		}
 	}
 	e.SealConfig = sealConfig
 
+	if config.Storage == nil {
+		return fmt.Errorf("no storage stanza found in Vault configuration file")
+	}
+	storageConfig := config.Storage.Config
+
+	if val, ok := storageConfig["path"]; ok {
+		e.BoltDB = val + "/vault.db"
+		fmt.Println("found storage path:", val)
+	} else {
+		return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")
+	}
+
 	fmt.Println("seal type:", e.SealConfig.Type)
-	fmt.Println("boltdb path:", e.BoltDB)
+	fmt.Println("successfully loaded Vault server configuration")
 	return nil
 }
