@@ -6,9 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
-
-	"github.com/gofrs/flock"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -24,19 +23,32 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	return result, err
 }
 
+func copyFile(source string, dest string) error {
+	input, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(dest, input, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
-	fileLock := flock.New(e.BoltDB)
-	locked := fileLock.Locked()
-	if locked {
-		fmt.Println("file is locked, attempting to unlock")
-		fileLock.Unlock()
-	} else {
-		fmt.Println("file not locked")
-	}
-	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{
+		ReadOnly: true,
+		Timeout:  5 * time.Second,
+	})
 	if err != nil {
-		return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
+		fmt.Println("unable to open database file, attempting to copy...")
+		err = copyFile(e.BoltDB, "./vault.db")
+		e.BoltDB = "./vault.db"
+		if err != nil {
+			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
+		}
 	}
 	defer db.Close()
 	fmt.Println("successfully opened boltdb file")
