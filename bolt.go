@@ -31,6 +31,8 @@ func (e *encryptionData) getKeys() error {
 	if locked {
 		fmt.Println("file is locked, attempting to unlock")
 		fileLock.Unlock()
+	} else {
+		fmt.Println("file not locked")
 	}
 	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
 	if err != nil {
