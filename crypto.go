@@ -23,11 +23,21 @@ import (
 func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 	// Initialize the seal configuration and set parameters learned Vault configuration file
 	ctx := context.Background()
-	var wrapper *transit.Wrapper
 
+	// Load the seal ciphertext into a blobInfo object
+	blobInfo := &wrapping.BlobInfo{}
+	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
+		eLen := len(ciphertext)
+		if err := proto.Unmarshal(ciphertext[:eLen-1], blobInfo); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ciphertext to blob: %s: %v", err, blobInfo)
+		}
+	}
+
+	// Set wrapper configuration based on seal type and decrypt
+	var pt []byte
 	switch sealConfig.Type {
 	case "transit":
-		wrapper = transit.NewWrapper()
+		wrapper := transit.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
 			"mount_path": sealConfig.MountPath,
 			"key_name":   sealConfig.KeyName,
@@ -36,6 +46,10 @@ func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+		}
+		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
 	case "gcpckms":
 		wrapper := gcpckms.NewWrapper()
@@ -48,23 +62,12 @@ func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
+		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
+		}
 	default:
 		return nil, fmt.Errorf("seal type not supported")
-	}
-
-	// Load the seal ciphertext into a blobInfo object
-	blobInfo := &wrapping.BlobInfo{}
-	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
-		eLen := len(ciphertext)
-		if err := proto.Unmarshal(ciphertext[:eLen-1], blobInfo); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal ciphertext to blob: %s: %v", err, blobInfo)
-		}
-	}
-
-	// Decrypt blobInfo
-	pt, err := wrapper.Decrypt(ctx, blobInfo, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 	}
 
 	return pt, nil
