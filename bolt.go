@@ -40,7 +40,7 @@ func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
 	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{
 		ReadOnly: true,
-		Timeout:  5 * time.Second,
+		Timeout:  2 * time.Second,
 	})
 	if err != nil {
 		fmt.Println("unable to open database file, attempting to copy...")
@@ -51,7 +51,7 @@ func (e *encryptionData) getKeys() error {
 		e.BoltDB = "./vault.db"
 		db, err = bolt.Open(e.BoltDB, 0700, &bolt.Options{
 			ReadOnly: true,
-			Timeout:  5 * time.Second,
+			Timeout:  2 * time.Second,
 		})
 		if err != nil {
 			return fmt.Errorf("error accessing %s after copy attempt: %v", e.BoltDB, err)
