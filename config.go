@@ -65,6 +65,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 
 		if val, ok := storageConfig["path"]; ok {
 			e.BoltDB = val + "/vault.db"
+			fmt.Println("found storage path:", val)
 		} else {
 			return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")
 		}
