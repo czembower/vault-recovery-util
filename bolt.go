@@ -28,6 +28,7 @@ func (e *encryptionData) getKeys() error {
 		return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
 	}
 	defer db.Close()
+	fmt.Println("successfully opened boltdb file")
 
 	rootKeyCipher, err := boltRead(db, rootKeyPath)
 	if err != nil {
