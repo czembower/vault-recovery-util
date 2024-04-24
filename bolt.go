@@ -44,7 +44,7 @@ func (e *encryptionData) getKeys() error {
 	})
 	if err != nil {
 		fmt.Println("unable to open database file, attempting to copy...")
-		db.Close()
+		_ = db.Close()
 		err = copyFile(e.BoltDB, "./vault.db")
 		e.BoltDB = "./vault.db"
 		if err != nil {
