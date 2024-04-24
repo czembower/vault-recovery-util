@@ -15,7 +15,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 		return fmt.Errorf("failed to locate Vault configuration file: %v", err)
 	}
 
-	config, err := server.ParseConfig(string(file), e.BoltDB)
+	config, err := server.ParseConfig(string(file), vaultConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse Vault server configuration file: %v", err)
 	}
@@ -73,7 +73,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 	}
 
 	fmt.Println("successfully loaded Vault server configuration")
-	fmt.Println("seal type:", e.SealConfig.Type)
+	fmt.Println("seal type:", sealConfig.Type)
 	fmt.Println("boltdb path:", e.BoltDB)
 	return nil
 }
