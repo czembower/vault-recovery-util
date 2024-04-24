@@ -72,7 +72,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 	}
 
 	fmt.Println("successfully loaded Vault server configuration")
-	fmt.Println("seal type:", sealConfig.Type)
+	fmt.Println("seal type:", e.SealConfig.Type)
 	fmt.Println("boltdb path:", e.BoltDB)
 	return nil
 }
