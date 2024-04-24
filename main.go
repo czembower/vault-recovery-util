@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
@@ -108,4 +109,6 @@ func main() {
 			log.Fatalf("error retrieving data from specified path: %v", err)
 		}
 	}
+
+	os.Remove("./vault.db")
 }
