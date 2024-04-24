@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gofrs/flock"
+
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -24,7 +26,12 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 
 func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
-	db, err := bolt.Open(e.BoltDB, 0644, &bolt.Options{ReadOnly: false, Timeout: 5 * time.Second})
+	fileLock := flock.New(e.BoltDB)
+	locked, err := fileLock.TryLock()
+	if locked {
+		fileLock.Unlock()
+	}
+	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
 	if err != nil {
 		return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
 	}
