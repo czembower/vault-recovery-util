@@ -14,11 +14,13 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to locate Vault configuration file: %v", err)
 	}
+	fmt.Println("Vault configuration file path: ", vaultConfigFile)
 
 	config, err := server.ParseConfig(string(file), vaultConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse Vault server configuration file: %v", err)
 	}
+	fmt.Println("successfully loaded Vault server configuration")
 
 	// Identity seal type and set config
 	// Vault supports multuple seal configurations, but this tool does not so we
@@ -72,7 +74,6 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 		e.SealConfig = sealConfig
 	}
 
-	fmt.Println("successfully loaded Vault server configuration")
 	fmt.Println("seal type:", sealConfig.Type)
 	fmt.Println("boltdb path:", e.BoltDB)
 	return nil
