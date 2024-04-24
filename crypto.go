@@ -20,49 +20,36 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func decryptTransit(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
+func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 	// Initialize the seal configuration and set parameters learned Vault configuration file
 	ctx := context.Background()
-	wrapper := transit.NewWrapper()
-	_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-		"mount_path": sealConfig.MountPath,
-		"key_name":   sealConfig.KeyName,
-		"address":    sealConfig.Address,
-		"token":      sealConfig.Token,
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
-	}
+	var wrapper *transit.Wrapper
 
-	// Load the seal ciphertext into a blobInfo object
-	blobInfo := &wrapping.BlobInfo{}
-	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
-		eLen := len(ciphertext)
-		if err := proto.Unmarshal(ciphertext[:eLen-1], blobInfo); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal ciphertext to blob: %s: %v", err, blobInfo)
+	switch sealConfig.Type {
+	case "transit":
+		wrapper = transit.NewWrapper()
+		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
+			"mount_path": sealConfig.MountPath,
+			"key_name":   sealConfig.KeyName,
+			"address":    sealConfig.Address,
+			"token":      sealConfig.Token,
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-	}
-
-	// Decrypt blobInfo
-	pt, err := wrapper.Decrypt(ctx, blobInfo, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
-	}
-
-	return pt, nil
-}
-
-func decryptGcpKms(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
-	ctx := context.Background()
-	wrapper := gcpckms.NewWrapper()
-	_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-		"project":    sealConfig.Project,
-		"region":     sealConfig.Region,
-		"key_ring":   sealConfig.KeyRing,
-		"crypto_key": sealConfig.CryptoKey,
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+	case "gcpckms":
+		wrapper := gcpckms.NewWrapper()
+		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
+			"project":    sealConfig.Project,
+			"region":     sealConfig.Region,
+			"key_ring":   sealConfig.KeyRing,
+			"crypto_key": sealConfig.CryptoKey,
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+		}
+	default:
+		return nil, fmt.Errorf("seal type not supported")
 	}
 
 	// Load the seal ciphertext into a blobInfo object

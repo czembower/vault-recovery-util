@@ -85,35 +85,17 @@ func (e *encryptionData) getKeys() error {
 	var ptRecoveryKey []byte
 	var ptKeyring []byte
 
-	switch e.SealConfig.Type {
-	case "transit":
-		ptRootKey, err = decryptTransit(rootKeyCipher, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-		ptRecoveryKey, err = decryptTransit(recoveryKeyCipher, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-		ptKeyring, err = decryptTransit(keyringCiphertext, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-	case "gcpckms":
-		ptRootKey, err = decryptGcpKms(rootKeyCipher, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-		ptRecoveryKey, err = decryptGcpKms(recoveryKeyCipher, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-		ptKeyring, err = decryptGcpKms(keyringCiphertext, e.SealConfig)
-		if err != nil {
-			return fmt.Errorf("%v", err)
-		}
-	default:
-		return fmt.Errorf("unknown or unsuppported seal device: %s", e.SealConfig.Type)
+	ptRootKey, err = decryptSeal(rootKeyCipher, e.SealConfig)
+	if err != nil {
+		return fmt.Errorf("%v", err)
+	}
+	ptRecoveryKey, err = decryptSeal(recoveryKeyCipher, e.SealConfig)
+	if err != nil {
+		return fmt.Errorf("%v", err)
+	}
+	ptKeyring, err = decryptSeal(keyringCiphertext, e.SealConfig)
+	if err != nil {
+		return fmt.Errorf("%v", err)
 	}
 
 	// The seal-decrypted root key is an array of base64-encoded strings,
