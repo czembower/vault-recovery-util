@@ -45,10 +45,10 @@ func (e *encryptionData) getKeys() error {
 	if err != nil {
 		fmt.Println("unable to open database file, attempting to copy...")
 		err = copyFile(e.BoltDB, "./vault.db")
-		e.BoltDB = "./vault.db"
 		if err != nil {
 			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
 		}
+		e.BoltDB = "./vault.db"
 		db, err = bolt.Open(e.BoltDB, 0700, &bolt.Options{
 			ReadOnly: true,
 			Timeout:  5 * time.Second,
