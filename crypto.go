@@ -12,6 +12,7 @@ import (
 	"log"
 
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
+	"github.com/hashicorp/go-kms-wrapping/wrappers/gcpckms/v2"
 	transit "github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
 	"github.com/hashicorp/vault/sdk/helper/compressutil"
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
@@ -28,6 +29,37 @@ func decryptTransit(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 		"key_name":   sealConfig.KeyName,
 		"address":    sealConfig.Address,
 		"token":      sealConfig.Token,
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+	}
+
+	// Load the seal ciphertext into a blobInfo object
+	blobInfo := &wrapping.BlobInfo{}
+	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
+		eLen := len(ciphertext)
+		if err := proto.Unmarshal(ciphertext[:eLen-1], blobInfo); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ciphertext to blob: %s: %v", err, blobInfo)
+		}
+	}
+
+	// Decrypt blobInfo
+	pt, err := wrapper.Decrypt(ctx, blobInfo, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
+	}
+
+	return pt, nil
+}
+
+func decryptGcpKms(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
+	ctx := context.Background()
+	wrapper := gcpckms.NewWrapper()
+	_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
+		"project":    sealConfig.Project,
+		"region":     sealConfig.Region,
+		"key_ring":   sealConfig.KeyRing,
+		"crypto_key": sealConfig.CryptoKey,
 	}))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize wrapper: %s", err)

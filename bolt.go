@@ -68,6 +68,19 @@ func (e *encryptionData) getKeys() error {
 		if err != nil {
 			return fmt.Errorf("%v", err)
 		}
+	case "gcpckms":
+		ptRootKey, err = decryptGcpKms(rootKeyCipher, e.SealConfig)
+		if err != nil {
+			return fmt.Errorf("%v", err)
+		}
+		ptRecoveryKey, err = decryptGcpKms(recoveryKeyCipher, e.SealConfig)
+		if err != nil {
+			return fmt.Errorf("%v", err)
+		}
+		ptKeyring, err = decryptGcpKms(keyringCiphertext, e.SealConfig)
+		if err != nil {
+			return fmt.Errorf("%v", err)
+		}
 	default:
 		return fmt.Errorf("unknown or unsuppported seal device: %s", e.SealConfig.Type)
 	}
