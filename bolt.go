@@ -38,7 +38,7 @@ func copyFile(source string, dest string) error {
 
 func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
-	db, err := bolt.Open(e.BoltDB, 0700, &bolt.Options{
+	db, err := bolt.Open(e.BoltDB, 0400, &bolt.Options{
 		ReadOnly: true,
 		Timeout:  2 * time.Second,
 		OpenFile: func(name string, flag int, perm os.FileMode) (*os.File, error) {
