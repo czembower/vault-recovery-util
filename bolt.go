@@ -49,10 +49,7 @@ func (e *encryptionData) getKeys() error {
 			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
 		}
 		e.BoltDB = "./vault.db"
-		db, err = bolt.Open(e.BoltDB, 0700, &bolt.Options{
-			ReadOnly: true,
-			Timeout:  2 * time.Second,
-		})
+		db, err = bolt.Open(e.BoltDB, 0700, nil)
 		if err != nil {
 			return fmt.Errorf("error accessing %s after copy attempt: %v", e.BoltDB, err)
 		}
