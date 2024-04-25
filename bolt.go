@@ -38,16 +38,9 @@ func copyFile(source string, dest string) error {
 
 func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
-	db, err := bolt.Open(e.BoltDB, 0400, &bolt.Options{
+	db, err := bolt.Open(e.BoltDB, 0o600, &bolt.Options{
 		ReadOnly: true,
 		Timeout:  2 * time.Second,
-		OpenFile: func(name string, flag int, perm os.FileMode) (*os.File, error) {
-			f, err := os.OpenFile(name, os.O_RDONLY, perm)
-			if err != nil {
-				return nil, err
-			}
-			return f, nil
-		},
 	})
 	if err != nil {
 		fmt.Println("unable to open database file, attempting to copy...")
