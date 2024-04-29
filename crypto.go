@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"strconv"
 
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
@@ -20,7 +19,6 @@ import (
 	transit "github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
 	"github.com/hashicorp/vault/sdk/helper/compressutil"
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
-	"github.com/hashicorp/vault/shamir"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -48,13 +46,13 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	case "transit":
 		wrapper := transit.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"mount_path":      e.SealConfig.MountPath,
-			"key_name":        e.SealConfig.KeyName,
-			"address":         e.SealConfig.Address,
-			"token":           e.SealConfig.Token,
-			"namespace":       e.SealConfig.Namespace,
-			"tls_ca_cert":     e.SealConfig.TlsCaCert,
-			"tls_skip_verify": strconv.FormatBool(e.SealConfig.TlsSkipVerify),
+			"mount_path":      e.SealConfig.TransitConfig.MountPath,
+			"key_name":        e.SealConfig.TransitConfig.KeyName,
+			"address":         e.SealConfig.TransitConfig.Address,
+			"token":           e.SealConfig.TransitConfig.Token,
+			"namespace":       e.SealConfig.TransitConfig.Namespace,
+			"tls_ca_cert":     e.SealConfig.TransitConfig.TlsCaCert,
+			"tls_skip_verify": strconv.FormatBool(e.SealConfig.TransitConfig.TlsSkipVerify),
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -66,10 +64,10 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	case "gcpckms":
 		wrapper := gcpckms.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"project":    e.SealConfig.Project,
-			"region":     e.SealConfig.Region,
-			"key_ring":   e.SealConfig.KeyRing,
-			"crypto_key": e.SealConfig.CryptoKey,
+			"project":    e.SealConfig.GcpCkmsConfig.Project,
+			"region":     e.SealConfig.GcpCkmsConfig.Region,
+			"key_ring":   e.SealConfig.GcpCkmsConfig.KeyRing,
+			"crypto_key": e.SealConfig.GcpCkmsConfig.CryptoKey,
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -81,12 +79,12 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	case "azurekeyvault":
 		wrapper := azurekeyvault.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"tenant_id":     e.SealConfig.TenantID,
-			"client_id":     e.SealConfig.ClientID,
-			"client_secret": e.SealConfig.ClientSecret,
-			"resource":      e.SealConfig.Resource,
-			"vault_name":    e.SealConfig.VaultName,
-			"key_name":      e.SealConfig.KeyName,
+			"tenant_id":     e.SealConfig.AzureKeyVaultConfig.TenantID,
+			"client_id":     e.SealConfig.AzureKeyVaultConfig.ClientID,
+			"client_secret": e.SealConfig.AzureKeyVaultConfig.ClientSecret,
+			"resource":      e.SealConfig.AzureKeyVaultConfig.Resource,
+			"vault_name":    e.SealConfig.AzureKeyVaultConfig.VaultName,
+			"key_name":      e.SealConfig.AzureKeyVaultConfig.KeyName,
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -98,16 +96,16 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	case "awskms":
 		wrapper := awskms.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithKeyId(""), wrapping.WithConfigMap(map[string]string{
-			"region":                  e.SealConfig.Region,
-			"endpoint":                e.SealConfig.Endpoint,
-			"access_key":              e.SealConfig.AccessKey,
-			"secret_key":              e.SealConfig.SecretKey,
-			"session_token":           e.SealConfig.SessionToken,
-			"shared_creds_filename":   e.SealConfig.SharedCredsFile,
-			"shared_creds_profile":    e.SealConfig.SharedCredsProfile,
-			"web_identity_token_file": e.SealConfig.WebIdentityTokenFile,
-			"role_session_name":       e.SealConfig.RoleSessionName,
-			"role_arn":                e.SealConfig.RoleArn,
+			"region":                  e.SealConfig.AwsKmsConfig.Region,
+			"endpoint":                e.SealConfig.AwsKmsConfig.Endpoint,
+			"access_key":              e.SealConfig.AwsKmsConfig.AccessKey,
+			"secret_key":              e.SealConfig.AwsKmsConfig.SecretKey,
+			"session_token":           e.SealConfig.AwsKmsConfig.SessionToken,
+			"shared_creds_filename":   e.SealConfig.AwsKmsConfig.SharedCredsFile,
+			"shared_creds_profile":    e.SealConfig.AwsKmsConfig.SharedCredsProfile,
+			"web_identity_token_file": e.SealConfig.AwsKmsConfig.WebIdentityTokenFile,
+			"role_session_name":       e.SealConfig.AwsKmsConfig.RoleSessionName,
+			"role_arn":                e.SealConfig.AwsKmsConfig.RoleArn,
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -205,7 +203,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decompress result: %v", err)
 		}
-		fmt.Printf("decrypted content:\n%v\n", vaultDataTable)
+		fmt.Printf("decrypted content:\n%s\n", vaultDataTable)
 		return nil, nil
 	}
 
@@ -222,35 +220,4 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	}
 
 	return result, nil
-}
-
-func (e *encryptionData) shamirSplit() error {
-	shamirBytes, err := shamir.Split(e.RecoveryKey, e.RecoveryConfig.SecretShares, e.RecoveryConfig.SecretThreshold)
-	if err != nil {
-		log.Fatalf("failed to create Shamir key shares of recovery key: %v", err)
-	}
-
-	for idx, keyshare := range shamirBytes {
-		fmt.Printf("recovery key share %v: %s\n", idx+1, base64.StdEncoding.EncodeToString(keyshare))
-	}
-
-	return nil
-}
-
-func inputKeyShares(e *encryptionData) ([]byte, error) {
-	inputString := make([]string, e.ShamirConfig.SecretThreshold)
-	inputBytes := make([][]byte, e.ShamirConfig.SecretThreshold)
-
-	for idx := range inputString {
-		fmt.Printf("unseal key share (%d of %d): ", idx+1, e.ShamirConfig.SecretThreshold)
-		fmt.Scanln(&inputString[idx])
-		bytes, _ := base64.StdEncoding.DecodeString(inputString[idx])
-		inputBytes[idx] = bytes
-	}
-
-	combineOutput, err := shamir.Combine(inputBytes)
-	if err != nil {
-		return nil, fmt.Errorf("error combining input strings: %v", err)
-	}
-	return combineOutput, nil
 }

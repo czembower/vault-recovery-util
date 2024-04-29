@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 )
 
 const (
@@ -21,46 +20,6 @@ const (
 	AESGCMVersion2     = 0x2
 )
 
-type shamirOrRecoveryConfig struct {
-	Type            string `json:"type"`
-	SecretShares    int    `json:"secret_shares"`
-	SecretThreshold int    `json:"secret_threshold"`
-	PgpKeys         any    `json:"pgp_keys"`
-	Nonce           string `json:"nonce"`
-	Backup          bool   `json:"backup"`
-	StoredShares    int    `json:"stored_shares"`
-	Name            string `json:"name"`
-}
-
-type sealConfig struct {
-	Type                 string `json:"type,omitempty"`
-	Address              string `json:"address,omitempty"`
-	KeyName              string `json:"key_name,omitempty"`
-	MountPath            string `json:"mount_path,omitempty"`
-	TlsSkipVerify        bool   `json:"ssl_skip_verify,omitempty"`
-	Token                string `json:"token,omitempty"`
-	Namespace            string `json:"namespace,omitempty"`
-	TlsCaCert            string `json:"tls_ca_cert,omitempty"`
-	Project              string `json:"project,omitempty"`
-	Region               string `json:"region,omitempty"`
-	KeyRing              string `json:"key_ring,omitempty"`
-	CryptoKey            string `json:"crypto_key,omitempty"`
-	TenantID             string `json:"tenant_id,omitempty"`
-	ClientID             string `json:"client_id,omitempty"`
-	ClientSecret         string `json:"client_secret,omitempty"`
-	Resource             string `json:"resource,omitempty"`
-	VaultName            string `json:"vault_name,omitempty"`
-	Endpoint             string `json:"endpoint,omitempty"`
-	AccessKey            string `json:"access_access,omitempty"`
-	SecretKey            string `json:"secret_key,omitempty"`
-	SessionToken         string `json:"session_token,omitempty"`
-	SharedCredsFile      string `json:"shared_creds_file,omitempty"`
-	SharedCredsProfile   string `json:"shared_creds_profile,omitempty"`
-	WebIdentityTokenFile string `json:"web_identity_token_file,omitempty"`
-	RoleSessionName      string `json:"role_session_name,omitempty"`
-	RoleArn              string `json:"role_arn,omitempty"`
-}
-
 type encryptionData struct {
 	RootKey        []byte                 `json:"root_key,omitempty"`
 	RecoveryKey    []byte                 `json:"recovery_key,omitempty"`
@@ -71,22 +30,6 @@ type encryptionData struct {
 	ShamirConfig   shamirOrRecoveryConfig `json:"shamir_config,omitempty"`
 	RecoveryConfig shamirOrRecoveryConfig `json:"recovery_config,omitempty"`
 	KeyringData    keyringData            `json:"keyring_data,omitempty"`
-}
-
-type keyringData struct {
-	MasterKey string `json:"MasterKey"`
-	Keys      []struct {
-		Term        int       `json:"Term,omitempty"`
-		Version     int       `json:"Version,omitempty"`
-		Value       string    `json:"Value,omitempty"`
-		InstallTime time.Time `json:"InstallTime,omitempty"`
-		Encryptions int       `json:"encryptions,omitempty"`
-	} `json:"Keys"`
-	RotationConfig struct {
-		Disabled      bool  `json:"Disabled,omitempty"`
-		MaxOperations int64 `json:"MaxOperations,omitempty"`
-		Interval      int   `json:"Interval,omitempty"`
-	} `json:"RotationConfig"`
 }
 
 func main() {

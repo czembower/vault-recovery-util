@@ -13,6 +13,33 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+type shamirOrRecoveryConfig struct {
+	Type            string `json:"type"`
+	SecretShares    int    `json:"secret_shares"`
+	SecretThreshold int    `json:"secret_threshold"`
+	PgpKeys         any    `json:"pgp_keys"`
+	Nonce           string `json:"nonce"`
+	Backup          bool   `json:"backup"`
+	StoredShares    int    `json:"stored_shares"`
+	Name            string `json:"name"`
+}
+
+type keyringData struct {
+	MasterKey string `json:"MasterKey"`
+	Keys      []struct {
+		Term        int       `json:"term,omitempty"`
+		Version     int       `json:"version,omitempty"`
+		Value       string    `json:"value,omitempty"`
+		InstallTime time.Time `json:"installTime,omitempty"`
+		Encryptions int       `json:"encryptions,omitempty"`
+	} `json:"keys"`
+	RotationConfig struct {
+		Disabled      bool  `json:"disabled,omitempty"`
+		MaxOperations int64 `json:"maxOperations,omitempty"`
+		Interval      int   `json:"interval,omitempty"`
+	} `json:"rotationConfig"`
+}
+
 func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	var result []byte
 	err := db.View(func(tx *bolt.Tx) error {
