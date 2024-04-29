@@ -79,6 +79,7 @@ func main() {
 		fmt.Printf("%s\n", keyringJson)
 	}
 
+	// Print the recovery key, if present
 	if *printRecoveryKey {
 		if encData.RecoveryKey != nil {
 			fmt.Printf("recovery key base64: %s\n", base64.StdEncoding.EncodeToString(encData.RecoveryKey))
@@ -87,6 +88,7 @@ func main() {
 		}
 	}
 
+	// Print the unseal key, if present
 	if *printUnsealKey {
 		if encData.UnsealKey != nil {
 			fmt.Printf("unseal key base64: %s\n", base64.StdEncoding.EncodeToString(encData.UnsealKey))
