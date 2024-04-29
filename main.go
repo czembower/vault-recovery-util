@@ -99,6 +99,10 @@ func main() {
 	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returning in plain text")
 	flag.Parse()
 
+	if len(os.Args) == 1 {
+		flag.Usage()
+	}
+
 	// Initialize and load the Vault configuration file
 	var encData encryptionData
 	err := encData.loadConfig(*vaultConfigFilePath)
