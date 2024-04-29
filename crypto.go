@@ -10,8 +10,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"strconv"
 
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
+	"github.com/hashicorp/go-kms-wrapping/v2/aead"
+	"github.com/hashicorp/go-kms-wrapping/wrappers/awskms/v2"
+	"github.com/hashicorp/go-kms-wrapping/wrappers/azurekeyvault/v2"
 	"github.com/hashicorp/go-kms-wrapping/wrappers/gcpckms/v2"
 	transit "github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
 	"github.com/hashicorp/vault/sdk/helper/compressutil"
@@ -20,7 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
+// decryptSeal uses the auto-unseal device or unseal key to decrypt the provided ciphertext
+func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	// Initialize the seal configuration and set parameters learned Vault configuration file
 	ctx := context.Background()
 
@@ -34,15 +39,22 @@ func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 	}
 
 	// Set wrapper configuration based on seal type and decrypt
+	// SetConfig uses the following precendence to discover these values:
+	// 1. environment variables
+	// 2. configuration file
+	// 3. instance identity/credentials
 	var pt []byte
-	switch sealConfig.Type {
+	switch e.SealConfig.Type {
 	case "transit":
 		wrapper := transit.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"mount_path": sealConfig.MountPath,
-			"key_name":   sealConfig.KeyName,
-			"address":    sealConfig.Address,
-			"token":      sealConfig.Token,
+			"mount_path":      e.SealConfig.MountPath,
+			"key_name":        e.SealConfig.KeyName,
+			"address":         e.SealConfig.Address,
+			"token":           e.SealConfig.Token,
+			"namespace":       e.SealConfig.Namespace,
+			"tls_ca_cert":     e.SealConfig.TlsCaCert,
+			"tls_skip_verify": strconv.FormatBool(e.SealConfig.TlsSkipVerify),
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -54,10 +66,68 @@ func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 	case "gcpckms":
 		wrapper := gcpckms.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"project":    sealConfig.Project,
-			"region":     sealConfig.Region,
-			"key_ring":   sealConfig.KeyRing,
-			"crypto_key": sealConfig.CryptoKey,
+			"project":    e.SealConfig.Project,
+			"region":     e.SealConfig.Region,
+			"key_ring":   e.SealConfig.KeyRing,
+			"crypto_key": e.SealConfig.CryptoKey,
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+		}
+		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
+		}
+	case "azurekeyvault":
+		wrapper := azurekeyvault.NewWrapper()
+		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
+			"tenant_id":     e.SealConfig.TenantID,
+			"client_id":     e.SealConfig.ClientID,
+			"client_secret": e.SealConfig.ClientSecret,
+			"resource":      e.SealConfig.Resource,
+			"vault_name":    e.SealConfig.VaultName,
+			"key_name":      e.SealConfig.KeyName,
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+		}
+		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
+		}
+	case "awskms":
+		wrapper := awskms.NewWrapper()
+		_, err := wrapper.SetConfig(ctx, wrapping.WithKeyId(""), wrapping.WithConfigMap(map[string]string{
+			"region":                  e.SealConfig.Region,
+			"endpoint":                e.SealConfig.Endpoint,
+			"access_key":              e.SealConfig.AccessKey,
+			"secret_key":              e.SealConfig.SecretKey,
+			"session_token":           e.SealConfig.SessionToken,
+			"shared_creds_filename":   e.SealConfig.SharedCredsFile,
+			"shared_creds_profile":    e.SealConfig.SharedCredsProfile,
+			"web_identity_token_file": e.SealConfig.WebIdentityTokenFile,
+			"role_session_name":       e.SealConfig.RoleSessionName,
+			"role_arn":                e.SealConfig.RoleArn,
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
+		}
+		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
+		}
+	case "shamir":
+		if e.UnsealKey == nil {
+			fmt.Println("no unseal key found, collecting key shares from input")
+			combinedUnsealKey, err := inputKeyShares(e)
+			if err != nil {
+				return nil, fmt.Errorf("failed to combine key shares: %s: %v", err, blobInfo)
+			}
+			e.UnsealKey = combinedUnsealKey
+		}
+		wrapper := aead.NewWrapper()
+		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
+			"key": base64.StdEncoding.EncodeToString(e.UnsealKey),
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
@@ -73,6 +143,7 @@ func decryptSeal(ciphertext []byte, sealConfig sealConfig) ([]byte, error) {
 	return pt, nil
 }
 
+// decrypt uses the provided key to open the ciphertext
 func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	// Initialize
 	aesCipher, err := aes.NewCipher(key)
@@ -88,10 +159,6 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	// Load ciphertext
 	ciphertext = bytes.TrimRight(ciphertext, "\n")
 	ciphertext = bytes.TrimRight(ciphertext, "\r")
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode ciphertext: %v", err)
-	}
-
 	if len(ciphertext) < gcm.NonceSize() {
 		return nil, fmt.Errorf("invalid ciphertext length")
 	}
@@ -111,7 +178,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		}
 	case AESGCMVersion2:
 		aad := []byte(nil)
-		if keyringPath != "" {
+		if aadPath != "" {
 			aad = []byte(aadPath)
 		}
 		result, err = gcm.Open(out, nonce, raw, aad)
@@ -168,4 +235,22 @@ func (e *encryptionData) shamirSplit() error {
 	}
 
 	return nil
+}
+
+func inputKeyShares(e *encryptionData) ([]byte, error) {
+	inputString := make([]string, e.ShamirConfig.SecretThreshold)
+	inputBytes := make([][]byte, e.ShamirConfig.SecretThreshold)
+
+	for idx := range inputString {
+		fmt.Printf("unseal key share (%d of %d): ", idx+1, e.ShamirConfig.SecretThreshold)
+		fmt.Scanln(&inputString[idx])
+		bytes, _ := base64.StdEncoding.DecodeString(inputString[idx])
+		inputBytes[idx] = bytes
+	}
+
+	combineOutput, err := shamir.Combine(inputBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error combining input strings: %v", err)
+	}
+	return combineOutput, nil
 }

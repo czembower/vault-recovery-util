@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -16,6 +17,9 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	var result []byte
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
+		if b == nil {
+			return fmt.Errorf("bolt DB bucket \"data\" not found")
+		}
 		result = b.Get([]byte(boltKey))
 		return nil
 	})
@@ -38,6 +42,9 @@ func copyFile(source string, dest string) error {
 
 func (e *encryptionData) getKeys() error {
 	// Open the BoltDB file
+	if _, err := os.Stat(e.BoltDB); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("database file not present: %s: %v", e.BoltDB, err)
+	}
 	db, err := bolt.Open(e.BoltDB, 0o600, &bolt.Options{
 		ReadOnly: true,
 		Timeout:  2 * time.Second,
@@ -55,74 +62,90 @@ func (e *encryptionData) getKeys() error {
 		}
 	}
 	defer db.Close()
-	fmt.Println("successfully opened boltdb file:", e.BoltDB)
 
+	// Read the root key and keyring ciphers from BoltDB
 	rootKeyCipher, err := boltRead(db, rootKeyPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
-	recoveryKeyCipher, err := boltRead(db, recoveryKeyPath)
+	keyringCipher, err := boltRead(db, keyringPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
-	recoveryConfigData, err := boltRead(db, recoveryConfigPath)
-	if err != nil {
-		return fmt.Errorf("error reading key from boltdb: %v", err)
+	// If using auto-unseal, get the recovery key cipher and config
+	if e.SealConfig.Type != "shamir" {
+		recoveryKeyCipher, err := boltRead(db, recoveryKeyPath)
+		if err != nil {
+			return fmt.Errorf("error reading key from boltdb: %v", err)
+		}
+
+		recoveryConfigData, err := boltRead(db, recoveryConfigPath)
+		if err != nil {
+			return fmt.Errorf("error reading key from boltdb: %v", err)
+		}
+
+		// decrypt the recovery key using the seal device
+		e.RecoveryKey, err = e.decryptSeal(recoveryKeyCipher)
+		if err != nil {
+			return fmt.Errorf("%v", err)
+		}
+
+		// load the recovery config into recoveryConfig
+		var recoveryConfig shamirOrRecoveryConfig
+		json.Unmarshal(recoveryConfigData, &recoveryConfig)
+		e.RecoveryConfig = recoveryConfig
+		fmt.Println("recovery type:", e.RecoveryConfig.Type)
+		// If shamir get the seal config
+	} else {
+		shamirConfigData, err := boltRead(db, shamirConfigPath)
+		if err != nil {
+			return fmt.Errorf("error reading key from boltdb: %v", err)
+		}
+
+		// load the shamir config into shamirConfig
+		var shamirConfig shamirOrRecoveryConfig
+		json.Unmarshal(shamirConfigData, &shamirConfig)
+		e.ShamirConfig = shamirConfig
 	}
 
-	keyringCiphertext, err := boltRead(db, keyringPath)
+	// Attempt to decrypt the root key and keyring
+	rootKeyReadBytes, err := e.decryptSeal(rootKeyCipher)
 	if err != nil {
-		return fmt.Errorf("error reading key from boltdb: %v", err)
+		return fmt.Errorf("error decrypting root key: %v", err)
 	}
 
-	// Depending on the seal type, attempt to decrypt
-	var ptRootKey []byte
-	var ptRecoveryKey []byte
-	var ptKeyring []byte
-
-	ptRootKey, err = decryptSeal(rootKeyCipher, e.SealConfig)
-	if err != nil {
-		return fmt.Errorf("%v", err)
-	}
-	ptRecoveryKey, err = decryptSeal(recoveryKeyCipher, e.SealConfig)
-	if err != nil {
-		return fmt.Errorf("%v", err)
-	}
-	ptKeyring, err = decryptSeal(keyringCiphertext, e.SealConfig)
-	if err != nil {
-		return fmt.Errorf("%v", err)
+	if e.SealConfig.Type != "shamir" {
+		e.Keyring, err = e.decryptSeal(keyringCipher)
+		if err != nil {
+			return fmt.Errorf("error decrypting keyring: %v", err)
+		}
+	} else {
+		// The keyring ciphertext must be tweaked for Shamir seals
+		lenCipher := len(keyringCipher)
+		e.Keyring = keyringCipher[3 : lenCipher-1]
 	}
 
 	// The seal-decrypted root key is an array of base64-encoded strings,
 	// but there is only one item in the array, so we extract it
 	var strArr []string
-	_ = json.Unmarshal([]byte(ptRootKey), &strArr)
-	decryptedRootKey := []byte(strArr[0])
+	_ = json.Unmarshal([]byte(rootKeyReadBytes), &strArr)
+	e.RootKey = []byte(strArr[0])
 
-	// Load the recovery config
-	var recoveryConfigStruct recoveryConfig
-	json.Unmarshal(recoveryConfigData, &recoveryConfigStruct)
-
-	// Set EncryptionData with decrypted bytes
-	e.RootKey = decryptedRootKey
-	e.RecoveryKey = ptRecoveryKey
-	e.Keyring = ptKeyring
-	e.RecoveryConfig = recoveryConfigStruct
-
-	// Push the root key through a string -> base64 decode
-	rootKeyBase64, err := base64.StdEncoding.DecodeString(string(e.RootKey))
+	// Push the root key through a byte -> string -> base64 decode
+	rootKeyBytes, err := base64.StdEncoding.DecodeString(string(e.RootKey))
 	if err != nil {
 		return fmt.Errorf("failed to encode root key base64: %v", err)
 	}
-	fmt.Println("recovery type:", e.RecoveryConfig.Type)
 
-	// Decrypt the keyring and load into keyringData struct
-	decryptedKeyring, err := decrypt(e.Keyring, rootKeyBase64, keyringPath)
+	// Decrypt the keyring using the root key and load into keyringData
+	var decryptedKeyring []byte
+	decryptedKeyring, err = decrypt(e.Keyring, rootKeyBytes, keyringPath)
 	if err != nil {
 		return fmt.Errorf("failed to decode keyring: %v", err)
 	}
+
 	var keyringData keyringData
 	json.Unmarshal(decryptedKeyring, &keyringData)
 	e.KeyringData = keyringData
