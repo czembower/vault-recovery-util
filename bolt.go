@@ -209,11 +209,10 @@ func (e *encryptionData) getKeys() error {
 	return nil
 }
 
-func getVaultData(encData encryptionData, keyringData keyringData, readPath string) error {
-	// Initialize the DB reader
-	db, err := bolt.Open(encData.BoltDB, 0700, &bolt.Options{ReadOnly: true})
+func getVaultData(dbFile string, keyringData keyringData, readPath string) error {
+	db, err := boltOpen(dbFile)
 	if err != nil {
-		return fmt.Errorf("error accessing boltdb: %v", err)
+		return fmt.Errorf("error opening database file %s: %v", dbFile, err)
 	}
 	defer db.Close()
 

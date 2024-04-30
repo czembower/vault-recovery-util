@@ -110,7 +110,7 @@ func main() {
 
 	// Read an arbitrary path from BoltDB and decrypt using the keyring
 	if *readPath != "" {
-		err = getVaultData(encData, encData.KeyringData, *readPath)
+		err = getVaultData(encData.BoltDB, encData.KeyringData, *readPath)
 		if err != nil {
 			log.Fatalf("error retrieving data from specified path: %v", err)
 		}
