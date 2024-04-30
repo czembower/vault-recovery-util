@@ -12,6 +12,8 @@ utility. It should only be used for educational or emergency applications.
 Usage of vault-recovery-util:
   -genRecoveryKeyShares
         Set to true to generate new recovery key shares
+  -listDbKeys
+        Display the BoltDB database contents
   -printKeyring
         Display the keyring data, including the data encryption keys and root key in base64 format
   -printRecoveryKey
