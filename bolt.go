@@ -77,14 +77,8 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	return result, err
 }
 
-func boltList(e *encryptionData) error {
-	db, err := boltOpen(e.BoltDB)
-	if err != nil {
-		return fmt.Errorf("error opening database file %s: %v", e.BoltDB, err)
-	}
-	defer db.Close()
-
-	err = db.View(func(tx *bolt.Tx) error {
+func boltList(db *bolt.DB) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
 		if b == nil {
 			return fmt.Errorf("bolt DB bucket \"data\" not found")
@@ -113,31 +107,25 @@ func copyFile(source string, dest string) error {
 }
 
 func (e *encryptionData) getKeys() error {
-	db, err := boltOpen(e.BoltDB)
-	if err != nil {
-		return fmt.Errorf("error opening database file %s: %v", e.BoltDB, err)
-	}
-	defer db.Close()
-
 	// Read the root key and keyring ciphers from BoltDB
-	rootKeyCipher, err := boltRead(db, rootKeyPath)
+	rootKeyCipher, err := boltRead(e.BoltDB, rootKeyPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
-	keyringCipher, err := boltRead(db, keyringPath)
+	keyringCipher, err := boltRead(e.BoltDB, keyringPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
 	// If using auto-unseal, get the recovery key cipher and config
 	if e.SealConfig.Type != "shamir" {
-		recoveryKeyCipher, err := boltRead(db, recoveryKeyPath)
+		recoveryKeyCipher, err := boltRead(e.BoltDB, recoveryKeyPath)
 		if err != nil {
 			return fmt.Errorf("error reading key from boltdb: %v", err)
 		}
 
-		recoveryConfigData, err := boltRead(db, recoveryConfigPath)
+		recoveryConfigData, err := boltRead(e.BoltDB, recoveryConfigPath)
 		if err != nil {
 			return fmt.Errorf("error reading key from boltdb: %v", err)
 		}
@@ -155,7 +143,7 @@ func (e *encryptionData) getKeys() error {
 		fmt.Println("recovery type:", e.RecoveryConfig.Type)
 		// If shamir get the seal config
 	} else {
-		shamirConfigData, err := boltRead(db, shamirConfigPath)
+		shamirConfigData, err := boltRead(e.BoltDB, shamirConfigPath)
 		if err != nil {
 			return fmt.Errorf("error reading key from boltdb: %v", err)
 		}
@@ -209,15 +197,9 @@ func (e *encryptionData) getKeys() error {
 	return nil
 }
 
-func getVaultData(dbFile string, keyringData keyringData, readPath string) error {
-	db, err := boltOpen(dbFile)
-	if err != nil {
-		return fmt.Errorf("error opening database file %s: %v", dbFile, err)
-	}
-	defer db.Close()
-
+func getVaultData(e *encryptionData, readPath string) error {
 	// Read from BoltDB and get ciphertext
-	ciphertext, err := boltRead(db, readPath)
+	ciphertext, err := boltRead(e.BoltDB, readPath)
 	if err != nil {
 		return fmt.Errorf("error accessing readPath from boltdb: %v", err)
 	}
@@ -230,7 +212,7 @@ func getVaultData(dbFile string, keyringData keyringData, readPath string) error
 		return fmt.Errorf("invalid data path: %v", err)
 	}
 	term := binary.BigEndian.Uint32(ciphertext[:4])
-	for _, keyInfo := range keyringData.Keys {
+	for _, keyInfo := range e.KeyringData.Keys {
 		if uint32(keyInfo.Term) == term {
 			dek = keyInfo.Value
 			fmt.Println("data encryption key:", dek)

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"go.etcd.io/bbolt"
 )
 
 const (
@@ -15,7 +17,6 @@ const (
 	rootKeyPath        = "core/hsm/barrier-unseal-keys"
 	keyringPath        = "core/keyring"
 	shamirConfigPath   = "core/seal-config"
-	shamirKekPath      = "core/shamir-kek"
 	AESGCMVersion1     = 0x1
 	AESGCMVersion2     = 0x2
 )
@@ -25,7 +26,8 @@ type encryptionData struct {
 	RecoveryKey    []byte                 `json:"recovery_key,omitempty"`
 	UnsealKey      []byte                 `json:"unseal_key,omitempty"`
 	Keyring        []byte                 `json:"keyring,omitempty"`
-	BoltDB         string                 `json:"bolt_db,omitempty"`
+	BoltDbFile     string                 `json:"bolt_db_file,omitempty"`
+	BoltDB         *bbolt.DB              `json:"bolt_db,omitempty"`
 	SealConfig     sealConfig             `json:"seal_config,omitempty"`
 	ShamirConfig   shamirOrRecoveryConfig `json:"shamir_config,omitempty"`
 	RecoveryConfig shamirOrRecoveryConfig `json:"recovery_config,omitempty"`
@@ -53,6 +55,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}
+
+	// open the Bolt DB
+	db, err := boltOpen(e.BoltDbFile)
+	e.BoltDB = db
+	if err != nil {
+		log.Fatalf("error opening database file %s: %v", e.BoltDB, err)
+	}
+	defer db.Close()
 
 	// Retrieve and decrypt the root key, keyring, recovery key/config
 	err = e.getKeys()
@@ -108,7 +118,7 @@ func main() {
 
 	// List BoltDB keys
 	if *listDbKeys {
-		err := boltList(&e)
+		err := boltList(e.BoltDB)
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
@@ -116,7 +126,7 @@ func main() {
 
 	// Read an arbitrary path from BoltDB and decrypt using the keyring
 	if *readPath != "" {
-		err = getVaultData(e.BoltDB, e.KeyringData, *readPath)
+		err = getVaultData(&e, *readPath)
 		if err != nil {
 			log.Fatalf("error retrieving data from specified path: %v", err)
 		}

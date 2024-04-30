@@ -21,13 +21,13 @@ func (e *encryptionData) shamirSplit() error {
 	return nil
 }
 
-func inputKeyShares(e *encryptionData) ([]byte, error) {
-	inputString := make([]string, e.ShamirConfig.SecretThreshold)
-	inputBytes := make([][]byte, e.ShamirConfig.SecretThreshold)
+func inputKeyShares(s shamirOrRecoveryConfig) ([]byte, error) {
+	inputString := make([]string, s.SecretThreshold)
+	inputBytes := make([][]byte, s.SecretThreshold)
 
 	for idx := range inputString {
-		fmt.Printf("unseal key share (%d of %d): ", idx+1, e.ShamirConfig.SecretThreshold)
-		fmt.Scanln(&inputString[idx])
+		fmt.Printf("unseal key share (%d of %d)", idx+1, s.SecretThreshold)
+		inputString[idx] = getPassword(": ")
 		bytes, _ := base64.StdEncoding.DecodeString(inputString[idx])
 		inputBytes[idx] = bytes
 	}

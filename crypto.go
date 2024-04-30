@@ -24,10 +24,9 @@ import (
 
 // decryptSeal uses the auto-unseal device or unseal key to decrypt the provided ciphertext
 func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
-	// Initialize the seal configuration and set parameters learned Vault configuration file
 	ctx := context.Background()
 
-	// Load the seal ciphertext into a blobInfo object
+	// Load the ciphertext into a blobInfo object
 	blobInfo := &wrapping.BlobInfo{}
 	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
 		eLen := len(ciphertext)
@@ -116,8 +115,8 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		}
 	case "shamir":
 		if e.UnsealKey == nil {
-			fmt.Println("no unseal key found, collecting key shares from input")
-			combinedUnsealKey, err := inputKeyShares(e)
+			fmt.Printf("no unseal key found, collecting key shares from input (threshold: %d)\n", e.ShamirConfig.SecretThreshold)
+			combinedUnsealKey, err := inputKeyShares(e.ShamirConfig)
 			if err != nil {
 				return nil, fmt.Errorf("failed to combine key shares: %s: %v", err, blobInfo)
 			}
@@ -141,7 +140,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	return pt, nil
 }
 
-// decrypt uses the provided key to open the ciphertext
+// decrypt uses the provided key to open the ciphertext using AES-GCM
 func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	// Initialize
 	aesCipher, err := aes.NewCipher(key)
@@ -154,7 +153,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create GCM cipher: %v", err)
 	}
 
-	// Load ciphertext
+	// Cleanup ciphertext (remove newlines)
 	ciphertext = bytes.TrimRight(ciphertext, "\n")
 	ciphertext = bytes.TrimRight(ciphertext, "\r")
 	if len(ciphertext) < gcm.NonceSize() {
@@ -174,6 +173,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt AESGCMVersion1 ciphertext: %v", err)
 		}
+	// Version2 uses the data path as additional authentication data
 	case AESGCMVersion2:
 		aad := []byte(nil)
 		if aadPath != "" {
@@ -192,6 +192,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	if aadPath != keyringPath {
 		fmt.Printf("compressed: %t\n", !uncompressed)
 	}
+	// If the data is compressed, pass it through jsonutil
 	if !uncompressed {
 		type VaultDataTable struct {
 			Type    string        `json:"type"`
@@ -208,6 +209,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	}
 
 	// Check to see if the returned data is an X.509 certificate
+	// If it is, return PEM for convenience
 	cert, err := x509.ParseCertificate(result)
 	if err == nil {
 		publicKeyBlock := pem.Block{
