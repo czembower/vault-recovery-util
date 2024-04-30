@@ -54,6 +54,42 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	return result, err
 }
 
+func boltList(e *encryptionData) error {
+	if _, err := os.Stat(e.BoltDB); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("database file not present: %s: %v", e.BoltDB, err)
+	}
+	db, err := bolt.Open(e.BoltDB, 0o600, &bolt.Options{
+		ReadOnly: true,
+		Timeout:  2 * time.Second,
+	})
+	if err != nil {
+		fmt.Println("unable to open database file, attempting to copy...")
+		err = copyFile(e.BoltDB, "./vault.db")
+		if err != nil {
+			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
+		}
+		e.BoltDB = "./vault.db"
+		db, err = bolt.Open(e.BoltDB, 0700, nil)
+		if err != nil {
+			return fmt.Errorf("error accessing %s after copy attempt: %v", e.BoltDB, err)
+		}
+	}
+	defer db.Close()
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		if b == nil {
+			return fmt.Errorf("bolt DB bucket \"data\" not found")
+		}
+		c := b.Cursor()
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			fmt.Printf("%s\n", k)
+		}
+		return nil
+	})
+	return err
+}
+
 func copyFile(source string, dest string) error {
 	input, err := os.ReadFile(source)
 	if err != nil {

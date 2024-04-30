@@ -39,6 +39,7 @@ func main() {
 	printKeyring := flag.Bool("printKeyring", false, "Display the keyring data, including the data encryption keys and root key in base64 format")
 	printRecoveryKey := flag.Bool("printRecoveryKey", false, "Display the recovery key in base64 format")
 	printUnsealKey := flag.Bool("printUnsealKey", false, "Display the unseal key in base64 format")
+	listDbKeys := flag.Bool("listDbKeys", false, "Display the BoltDB database contents")
 	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returning in plain text")
 	flag.Parse()
 
@@ -100,6 +101,11 @@ func main() {
 	// Calculate new Shamir key shares of the recovery key
 	if *genRecoveryKeyShares {
 		encData.shamirSplit()
+	}
+
+	// List BoltDB keys
+	if *listDbKeys {
+		boltList(&encData)
 	}
 
 	// Read an arbitrary path from BoltDB and decrypt using the keyring

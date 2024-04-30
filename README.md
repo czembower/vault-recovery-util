@@ -1,9 +1,9 @@
 # vault-recovery-util
 
-This tool reads and decrypt data from Vault's BoltDB storage backend, given
-sufficient access to the auto-unseal device or a reconstructed unseal key. It
-can also be used to generate new recovery/unseal key shares and inspect the
-keyring.
+This tool reads and decrypts data from Vault's BoltDB storage backend, given
+sufficient access to the auto-unseal device or a reconstructed Shamir unseal
+key. It can also be used to generate new recovery/unseal key shares and inspect
+the keyring.
 
 Note that extremely sensitive data can be exposed through the use of this
 utility. It should only be used for educational or emergency applications.
