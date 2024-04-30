@@ -28,10 +28,12 @@ type transitSealConfig struct {
 }
 
 type gcpCkmsSealConfig struct {
-	Project   string `json:"project,omitempty"`
-	Region    string `json:"region,omitempty"`
-	KeyRing   string `json:"key_ring,omitempty"`
-	CryptoKey string `json:"crypto_key,omitempty"`
+	UserAgent   string `json:"user_agent,omitempty"`
+	Credentials string `json:"credentials,omitempty"`
+	Project     string `json:"project,omitempty"`
+	Region      string `json:"region,omitempty"`
+	KeyRing     string `json:"key_ring,omitempty"`
+	CryptoKey   string `json:"crypto_key,omitempty"`
 }
 
 type azurekeyvaultSealConfig struct {
