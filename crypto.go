@@ -63,10 +63,12 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	case "gcpckms":
 		wrapper := gcpckms.NewWrapper()
 		_, err := wrapper.SetConfig(ctx, wrapping.WithConfigMap(map[string]string{
-			"project":    e.SealConfig.GcpCkmsConfig.Project,
-			"region":     e.SealConfig.GcpCkmsConfig.Region,
-			"key_ring":   e.SealConfig.GcpCkmsConfig.KeyRing,
-			"crypto_key": e.SealConfig.GcpCkmsConfig.CryptoKey,
+			"user_agent":  e.SealConfig.GcpCkmsConfig.UserAgent,
+			"credentials": e.SealConfig.GcpCkmsConfig.Credentials,
+			"project":     e.SealConfig.GcpCkmsConfig.Project,
+			"region":      e.SealConfig.GcpCkmsConfig.Region,
+			"key_ring":    e.SealConfig.GcpCkmsConfig.KeyRing,
+			"crypto_key":  e.SealConfig.GcpCkmsConfig.CryptoKey,
 		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
