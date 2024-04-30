@@ -40,6 +40,29 @@ type keyringData struct {
 	} `json:"rotationConfig"`
 }
 
+func boltOpen(dbFile string) (*bolt.DB, error) {
+	if _, err := os.Stat(dbFile); errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("database file not present: %s: %v", dbFile, err)
+	}
+	db, err := bolt.Open(dbFile, 0o600, &bolt.Options{
+		ReadOnly: true,
+		Timeout:  2 * time.Second,
+	})
+	if err != nil {
+		fmt.Println("unable to open database file, attempting to copy...")
+		err = copyFile(dbFile, "./vault.db")
+		if err != nil {
+			return nil, fmt.Errorf("error accessing %s: %v", dbFile, err)
+		}
+		dbFile = "./vault.db"
+		db, err = bolt.Open(dbFile, 0700, nil)
+		if err != nil {
+			return nil, fmt.Errorf("error accessing %s after copy attempt: %v", dbFile, err)
+		}
+	}
+	return db, nil
+}
+
 func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 	var result []byte
 	err := db.View(func(tx *bolt.Tx) error {
@@ -55,26 +78,12 @@ func boltRead(db *bolt.DB, boltKey string) ([]byte, error) {
 }
 
 func boltList(e *encryptionData) error {
-	if _, err := os.Stat(e.BoltDB); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("database file not present: %s: %v", e.BoltDB, err)
-	}
-	db, err := bolt.Open(e.BoltDB, 0o600, &bolt.Options{
-		ReadOnly: true,
-		Timeout:  2 * time.Second,
-	})
+	db, err := boltOpen(e.BoltDB)
 	if err != nil {
-		fmt.Println("unable to open database file, attempting to copy...")
-		err = copyFile(e.BoltDB, "./vault.db")
-		if err != nil {
-			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
-		}
-		e.BoltDB = "./vault.db"
-		db, err = bolt.Open(e.BoltDB, 0700, nil)
-		if err != nil {
-			return fmt.Errorf("error accessing %s after copy attempt: %v", e.BoltDB, err)
-		}
+		return fmt.Errorf("error opening database file %s: %v", e.BoltDB, err)
 	}
 	defer db.Close()
+
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
 		if b == nil {
@@ -104,25 +113,9 @@ func copyFile(source string, dest string) error {
 }
 
 func (e *encryptionData) getKeys() error {
-	// Open the BoltDB file
-	if _, err := os.Stat(e.BoltDB); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("database file not present: %s: %v", e.BoltDB, err)
-	}
-	db, err := bolt.Open(e.BoltDB, 0o600, &bolt.Options{
-		ReadOnly: true,
-		Timeout:  2 * time.Second,
-	})
+	db, err := boltOpen(e.BoltDB)
 	if err != nil {
-		fmt.Println("unable to open database file, attempting to copy...")
-		err = copyFile(e.BoltDB, "./vault.db")
-		if err != nil {
-			return fmt.Errorf("error accessing %s: %v", e.BoltDB, err)
-		}
-		e.BoltDB = "./vault.db"
-		db, err = bolt.Open(e.BoltDB, 0700, nil)
-		if err != nil {
-			return fmt.Errorf("error accessing %s after copy attempt: %v", e.BoltDB, err)
-		}
+		return fmt.Errorf("error opening database file %s: %v", e.BoltDB, err)
 	}
 	defer db.Close()
 
