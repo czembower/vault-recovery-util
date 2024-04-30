@@ -48,22 +48,22 @@ func main() {
 	}
 
 	// Initialize and load the Vault configuration file
-	var encData encryptionData
-	err := encData.loadConfig(*vaultConfigFilePath)
+	var e encryptionData
+	err := e.loadConfig(*vaultConfigFilePath)
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}
 
 	// Retrieve and decrypt the root key, keyring, recovery key/config
-	err = encData.getKeys()
+	err = e.getKeys()
 	if err != nil {
-		log.Fatalf("failed to access values from BoltDB: %v", err)
+		log.Fatalf("%v", err)
 	}
 
 	// Print the seal configuration
 	if *printSealConfig {
 		fmt.Println("seal configuration:")
-		sealConfig, err := json.MarshalIndent(encData.SealConfig, "", "  ")
+		sealConfig, err := json.MarshalIndent(e.SealConfig, "", "  ")
 		if err != nil {
 			log.Fatalf("unable to marshal seal configuration: %v", err)
 		}
@@ -73,7 +73,7 @@ func main() {
 	// Print the keyring
 	if *printKeyring {
 		fmt.Println("keyring:")
-		keyringJson, err := json.MarshalIndent(encData.KeyringData, "", "  ")
+		keyringJson, err := json.MarshalIndent(e.KeyringData, "", "  ")
 		if err != nil {
 			log.Fatalf("failed to marshal keyring data: %v", err)
 		}
@@ -82,8 +82,8 @@ func main() {
 
 	// Print the recovery key, if present
 	if *printRecoveryKey {
-		if encData.RecoveryKey != nil {
-			fmt.Printf("recovery key base64: %s\n", base64.StdEncoding.EncodeToString(encData.RecoveryKey))
+		if e.RecoveryKey != nil {
+			fmt.Printf("recovery key base64: %s\n", base64.StdEncoding.EncodeToString(e.RecoveryKey))
 		} else {
 			log.Fatal("no recovery key available")
 		}
@@ -91,8 +91,8 @@ func main() {
 
 	// Print the unseal key, if present
 	if *printUnsealKey {
-		if encData.UnsealKey != nil {
-			fmt.Printf("unseal key base64: %s\n", base64.StdEncoding.EncodeToString(encData.UnsealKey))
+		if e.UnsealKey != nil {
+			fmt.Printf("unseal key base64: %s\n", base64.StdEncoding.EncodeToString(e.UnsealKey))
 		} else {
 			log.Fatal("no unseal key available")
 		}
@@ -100,17 +100,23 @@ func main() {
 
 	// Calculate new Shamir key shares of the recovery key
 	if *genRecoveryKeyShares {
-		encData.shamirSplit()
+		err := e.shamirSplit()
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
 	}
 
 	// List BoltDB keys
 	if *listDbKeys {
-		boltList(&encData)
+		err := boltList(&e)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
 	}
 
 	// Read an arbitrary path from BoltDB and decrypt using the keyring
 	if *readPath != "" {
-		err = getVaultData(encData.BoltDB, encData.KeyringData, *readPath)
+		err = getVaultData(e.BoltDB, e.KeyringData, *readPath)
 		if err != nil {
 			log.Fatalf("error retrieving data from specified path: %v", err)
 		}
