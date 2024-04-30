@@ -123,6 +123,12 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 			sealConfig.TransitConfig.TlsCaCert = val
 		}
 	} else if sealConfig.Type == "gcpckms" {
+		if val, ok := seal.Config["user_agent"]; ok {
+			sealConfig.GcpCkmsConfig.UserAgent = val
+		}
+		if val, ok := seal.Config["credentials"]; ok {
+			sealConfig.GcpCkmsConfig.Credentials = val
+		}
 		if val, ok := seal.Config["project"]; ok {
 			sealConfig.GcpCkmsConfig.Project = val
 		}
