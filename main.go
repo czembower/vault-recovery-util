@@ -38,11 +38,9 @@ func main() {
 	vaultConfigFilePath := flag.String("vaultConfig", "./vault.hcl", "Path to the Vault server configuration file")
 	genKeyShares := flag.Bool("genKeyShares", false, "Set to true to generate new recovery/unseal key shares, depending on the seal type")
 	printSealConfig := flag.Bool("printSealConfig", false, "Display the seal configuration")
-	printKeyring := flag.Bool("printKeyring", false, "Display the keyring data, including the data encryption keys and root key in base64 format")
-	printRecoveryKey := flag.Bool("printRecoveryKey", false, "Display the recovery key in base64 format")
-	printUnsealKey := flag.Bool("printUnsealKey", false, "Display the unseal key in base64 format")
-	listDbKeys := flag.Bool("listDbKeys", false, "Display the BoltDB database contents")
-	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returning in plain text")
+	printKeys := flag.Bool("printKeys", false, "Display recovery/unseal key and the keyring data, including the data encryption keys and root key in base64 format")
+	listDb := flag.Bool("listDb", false, "Display the BoltDB database contents")
+	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead")
 	flag.Parse()
 
 	if len(os.Args) == 1 {
@@ -81,31 +79,19 @@ func main() {
 	}
 
 	// Print the keyring
-	if *printKeyring {
-		fmt.Println("keyring:")
-		keyringJson, err := json.MarshalIndent(e.KeyringData, "", "  ")
+	if *printKeys {
+		fmt.Println("root key:", e.KeyringData.MasterKey)
+		if e.RecoveryKey != nil {
+			fmt.Printf("recovery key base64: %s\n", base64.StdEncoding.EncodeToString(e.RecoveryKey))
+		}
+		if e.UnsealKey != nil {
+			fmt.Printf("unseal key base64: %s\n", base64.StdEncoding.EncodeToString(e.UnsealKey))
+		}
+		keyringJson, err := json.Marshal(e.KeyringData.Keys)
 		if err != nil {
 			log.Fatalf("failed to marshal keyring data: %v", err)
 		}
-		fmt.Printf("%s\n", keyringJson)
-	}
-
-	// Print the recovery key, if present
-	if *printRecoveryKey {
-		if e.RecoveryKey != nil {
-			fmt.Printf("recovery key base64: %s\n", base64.StdEncoding.EncodeToString(e.RecoveryKey))
-		} else {
-			log.Fatal("no recovery key available")
-		}
-	}
-
-	// Print the unseal key, if present
-	if *printUnsealKey {
-		if e.UnsealKey != nil {
-			fmt.Printf("unseal key base64: %s\n", base64.StdEncoding.EncodeToString(e.UnsealKey))
-		} else {
-			log.Fatal("no unseal key available")
-		}
+		fmt.Printf("data encryption keys: %s\n", keyringJson)
 	}
 
 	// Calculate new Shamir key shares of the recovery/unseal key
@@ -117,7 +103,7 @@ func main() {
 	}
 
 	// List BoltDB keys
-	if *listDbKeys {
+	if *listDb {
 		err := boltList(e.BoltDB)
 		if err != nil {
 			log.Fatalf("%v", err)

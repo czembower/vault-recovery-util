@@ -202,8 +202,7 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 	} else {
 		return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")
 	}
-
-	fmt.Println("successfully loaded Vault server configuration")
 	fmt.Println("seal type:", e.SealConfig.Type)
+
 	return nil
 }

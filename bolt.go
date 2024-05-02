@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -168,18 +167,16 @@ func (e *encryptionData) getKeys() error {
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal root key: %v", err)
 	}
-	e.RootKey = []byte(strArr[0])
 
 	// Push the root key through a byte -> string -> base64 decode
-	rootKeyBytes, err := base64.StdEncoding.DecodeString(string(e.RootKey))
+	e.RootKey, err = base64.StdEncoding.DecodeString(string([]byte(strArr[0])))
 	if err != nil {
 		return fmt.Errorf("failed to encode root key base64: %v", err)
 	}
-	fmt.Println("successfully decrypted root key")
 
 	// Decrypt the keyring using the root key and load into keyringData
 	var decryptedKeyring []byte
-	decryptedKeyring, err = decrypt(e.Keyring, rootKeyBytes, keyringPath)
+	decryptedKeyring, err = decrypt(e.Keyring, e.RootKey, keyringPath)
 	if err != nil {
 		return fmt.Errorf("failed to decode keyring: %v", err)
 	}
@@ -195,40 +192,17 @@ func getVaultData(e *encryptionData, readPath string) error {
 		return fmt.Errorf("error accessing readPath from boltdb: %v", err)
 	}
 
-	// Set the keyring term based on the ciphertext, and set the appropriate
-	// keyring DEK
-	var dek string
-	if len(ciphertext) == 0 {
-		return fmt.Errorf("invalid data path: %v", err)
-	}
-	term := binary.BigEndian.Uint32(ciphertext[:4])
-	for _, keyInfo := range e.KeyringData.Keys {
-		if uint32(keyInfo.Term) == term {
-			dek = keyInfo.Value
-			fmt.Println("data encryption key:", dek)
-			fmt.Println("key term:", term)
-		}
-	}
-
-	keyringKey, err := base64.StdEncoding.DecodeString(dek)
+	secret, err := attemptDecryption(ciphertext, readPath, *e)
 	if err != nil {
-		return fmt.Errorf("error base64-decoding keyring key ciphertext: %v", err)
-	}
-
-	// Decrypt the ciphertext using the keyring DEK
-	secret, err := decrypt(ciphertext, keyringKey, readPath)
-	if err != nil {
-		fmt.Printf("data at \"%s\" failed to decrypt -- raw storage content will be displayed:\n", readPath)
-		fmt.Printf("%s\n", ciphertext)
-		return nil
+		return fmt.Errorf("error decrypting data from boltdb: %v", err)
 	}
 
 	if secret != nil {
 		buf := &bytes.Buffer{}
 		if err := json.Indent(buf, secret, "", "  "); err == nil {
-			fmt.Printf("decrypted content:\n%s\n", buf)
+			fmt.Printf("content:\n%s\n", buf)
 		} else {
-			fmt.Println("decrypted content:\n", string(secret))
+			fmt.Println("content:\n", string(secret))
 		}
 	}
 	return nil
