@@ -10,9 +10,7 @@ import (
 	"os"
 	"time"
 
-	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
 	bolt "go.etcd.io/bbolt"
-	"google.golang.org/protobuf/proto"
 )
 
 type shamirOrRecoveryConfig struct {
@@ -95,21 +93,8 @@ func boltList(db *bolt.DB) error {
 	return err
 }
 
-func copyFile(source string, dest string) error {
-	input, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(dest, input, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (e *encryptionData) getKeys() error {
-	// Read the root key and keyring ciphers from BoltDB
+	// Read the root key and keyring ciphertexts from BoltDB
 	rootKeyCiphertext, err := boltRead(e.BoltDB, rootKeyPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
@@ -120,28 +105,26 @@ func (e *encryptionData) getKeys() error {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
-	// If using auto-unseal, get the recovery key cipher and config
+	// If using auto-unseal, get the recovery config and recovery key ciphertext
 	if e.SealConfig.Type != "shamir" {
-		recoveryKeyCipher, err := boltRead(e.BoltDB, recoveryKeyPath)
-		if err != nil {
-			return fmt.Errorf("error reading key from boltdb: %v", err)
-		}
-
 		recoveryConfigData, err := boltRead(e.BoltDB, recoveryConfigPath)
 		if err != nil {
 			return fmt.Errorf("error reading key from boltdb: %v", err)
 		}
 
+		recoveryKeyCiphertext, err := boltRead(e.BoltDB, recoveryKeyPath)
+		if err != nil {
+			return fmt.Errorf("error reading key from boltdb: %v", err)
+		}
+
 		// decrypt the recovery key using the seal device
-		e.RecoveryKey, err = e.decryptSeal(recoveryKeyCipher)
+		e.RecoveryKey, err = e.decryptSeal(recoveryKeyCiphertext)
 		if err != nil {
 			return fmt.Errorf("%v", err)
 		}
 
 		// load the recovery config into recoveryConfig
-		var recoveryConfig shamirOrRecoveryConfig
-		json.Unmarshal(recoveryConfigData, &recoveryConfig)
-		e.RecoveryConfig = recoveryConfig
+		json.Unmarshal(recoveryConfigData, &e.RecoveryConfig)
 		fmt.Println("recovery type:", e.RecoveryConfig.Type)
 		// If shamir get the seal config
 	} else {
@@ -151,39 +134,40 @@ func (e *encryptionData) getKeys() error {
 		}
 
 		// load the shamir config into shamirConfig
-		var shamirConfig shamirOrRecoveryConfig
-		json.Unmarshal(shamirConfigData, &shamirConfig)
-		e.ShamirConfig = shamirConfig
+		json.Unmarshal(shamirConfigData, &e.ShamirConfig)
 	}
 
-	// Attempt to decrypt the root key and keyring
+	// Decrypt the root key
 	rootKeyReadBytes, err := e.decryptSeal(rootKeyCiphertext)
 	if err != nil {
 		return fmt.Errorf("error decrypting root key: %v", err)
 	}
 
+	// Load the keyring
+	// For auto-unseal with seal wrap, unwrap the keyring ciphertext
 	if e.SealConfig.Type != "shamir" {
 		e.Keyring, err = e.decryptSeal(keyringCiphertext)
 		if err != nil {
 			return fmt.Errorf("error decrypting keyring: %v", err)
 		}
 	} else {
-		// For Shamir seals, we need to proto unmarshal the raw keyring data and
-		// extract only the relevant ciphertext portion before we hand to decrypt()
-		blobInfo := &wrapping.BlobInfo{}
-		if err := proto.Unmarshal(keyringCiphertext, blobInfo); err != nil {
-			eLen := len(keyringCiphertext)
-			if err := proto.Unmarshal(keyringCiphertext[:eLen-1], blobInfo); err != nil {
-				return fmt.Errorf("failed to proto unmarshal keyring: %s: %v", err, blobInfo)
-			}
+		// For Shamir seals, the keyring is not wrapped by the unseal key, so we
+		// only need to proto unmarshal the encrypted keyring data and extract the
+		// relevant ciphertext portion before we hand to decrypt()
+		blobInfo, err := protoUnmarshal(keyringCiphertext)
+		if err != nil {
+			return fmt.Errorf("%v", err)
 		}
 		e.Keyring = blobInfo.Ciphertext
 	}
 
-	// The seal-decrypted root key is an array of base64-encoded strings,
+	// The unwrapped root key plaintext is an array of base64-encoded strings,
 	// but there is only one item in the array, so we extract it
 	var strArr []string
-	_ = json.Unmarshal([]byte(rootKeyReadBytes), &strArr)
+	err = json.Unmarshal(rootKeyReadBytes, &strArr)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal root key: %v", err)
+	}
 	e.RootKey = []byte(strArr[0])
 
 	// Push the root key through a byte -> string -> base64 decode
@@ -199,10 +183,7 @@ func (e *encryptionData) getKeys() error {
 	if err != nil {
 		return fmt.Errorf("failed to decode keyring: %v", err)
 	}
-
-	var keyringData keyringData
-	json.Unmarshal(decryptedKeyring, &keyringData)
-	e.KeyringData = keyringData
+	json.Unmarshal(decryptedKeyring, &e.KeyringData)
 
 	return nil
 }
@@ -214,10 +195,9 @@ func getVaultData(e *encryptionData, readPath string) error {
 		return fmt.Errorf("error accessing readPath from boltdb: %v", err)
 	}
 
-	fmt.Println("data path:", readPath)
+	// Set the keyring term based on the ciphertext, and set the appropriate
+	// keyring DEK
 	var dek string
-
-	// Set the keyring term based on the ciphertext, and set the appropriate keyring DEK
 	if len(ciphertext) == 0 {
 		return fmt.Errorf("invalid data path: %v", err)
 	}

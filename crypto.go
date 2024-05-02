@@ -18,20 +18,14 @@ import (
 	"github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
 	"github.com/hashicorp/vault/sdk/helper/compressutil"
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
-	"google.golang.org/protobuf/proto"
 )
 
 // decryptSeal uses the auto-unseal device or unseal key to decrypt the provided ciphertext
 func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	ctx := context.Background()
-
-	// Load the ciphertext into a blobInfo object
-	blobInfo := &wrapping.BlobInfo{}
-	if err := proto.Unmarshal(ciphertext, blobInfo); err != nil {
-		eLen := len(ciphertext)
-		if err := proto.Unmarshal(ciphertext[:eLen-1], blobInfo); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal ciphertext to blob: %s: %v", err, blobInfo)
-		}
+	blobInfo, err := protoUnmarshal(ciphertext)
+	if err != nil {
+		return nil, fmt.Errorf("%v", err)
 	}
 
 	// Set wrapper configuration based on seal type and decrypt
@@ -39,7 +33,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 	// 1. environment variables
 	// 2. configuration file
 	// 3. instance identity/credentials
-	var pt []byte
+	var value []byte
 	switch e.SealConfig.Type {
 	case "transit":
 		wrapper := transit.NewWrapper()
@@ -55,7 +49,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		value, err = wrapper.Decrypt(ctx, blobInfo, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
@@ -72,7 +66,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		value, err = wrapper.Decrypt(ctx, blobInfo, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
@@ -89,7 +83,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		value, err = wrapper.Decrypt(ctx, blobInfo, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
@@ -110,7 +104,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		value, err = wrapper.Decrypt(ctx, blobInfo, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
@@ -130,7 +124,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize wrapper: %s", err)
 		}
-		pt, err = wrapper.Decrypt(ctx, blobInfo, nil)
+		value, err = wrapper.Decrypt(ctx, blobInfo, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt blobInfo: %s: %v", err, blobInfo)
 		}
@@ -138,12 +132,12 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("seal type not supported")
 	}
 
-	return pt, nil
+	return value, nil
 }
 
 // decrypt uses the provided key to open the ciphertext using AES-GCM
 func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
-	// Load the key into an AES cipher
+	// Load the key into an AES cipher block
 	aesCipher, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES cipher: %v", err)
@@ -173,7 +167,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt AESGCMVersion1 ciphertext: %v", err)
 		}
-	// Version2 uses the data path as additional authentication data
+	// Version2 uses the data path as additional authenticated data
 	case AESGCMVersion2:
 		aad := []byte(nil)
 		if aadPath != "" {

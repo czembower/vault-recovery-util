@@ -80,127 +80,124 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 
 	// Check for seal configuration and load the seal parameters to
 	// encryptionData.SealConfig
-	var sealConfig sealConfig
 	if seal == nil {
 		fmt.Println("no seals found in Vault configuration file, proceeding with Shamir seal type assumed")
-		sealConfig.Type = "shamir"
+		e.SealConfig.Type = "shamir"
 	} else {
-		sealConfig.Type = seal.Type
+		e.SealConfig.Type = seal.Type
 	}
 
-	if sealConfig.Type == "transit" {
+	if e.SealConfig.Type == "transit" {
 		// A Vault token for the Vault cluster providing the Transit engine is
 		// needed for Transit auto-unseal, and for this tool
 		// We can source that token from an the environment variable VAULT_TOKEN or
 		// read it from the Vault configuration file
 		// If neither is provided, return error
 		if os.Getenv("VAULT_TOKEN") != "" {
-			sealConfig.TransitConfig.Token = os.Getenv("VAULT_TOKEN")
+			e.SealConfig.TransitConfig.Token = os.Getenv("VAULT_TOKEN")
 		} else {
 			if seal.Config["token"] != "" {
-				sealConfig.TransitConfig.Token = seal.Config["token"]
+				e.SealConfig.TransitConfig.Token = seal.Config["token"]
 			} else {
 				return fmt.Errorf("no Vault token for transit engine in environment variables or provided Vault config")
 			}
 		}
 		if val, ok := seal.Config["address"]; ok {
-			sealConfig.TransitConfig.Address = val
+			e.SealConfig.TransitConfig.Address = val
 		}
 		if val, ok := seal.Config["key_name"]; ok {
-			sealConfig.TransitConfig.KeyName = val
+			e.SealConfig.TransitConfig.KeyName = val
 		}
 		if val, ok := seal.Config["mount_path"]; ok {
-			sealConfig.TransitConfig.MountPath = val
+			e.SealConfig.TransitConfig.MountPath = val
 		}
 		if val, ok := seal.Config["tls_skip_verify"]; ok {
 			sealTlsSkipVerify, _ := strconv.ParseBool(val)
-			sealConfig.TransitConfig.TlsSkipVerify = sealTlsSkipVerify
+			e.SealConfig.TransitConfig.TlsSkipVerify = sealTlsSkipVerify
 		}
 		if val, ok := seal.Config["namespace"]; ok {
-			sealConfig.TransitConfig.Namespace = val
+			e.SealConfig.TransitConfig.Namespace = val
 		}
 		if val, ok := seal.Config["tls_ca_cert"]; ok {
-			sealConfig.TransitConfig.TlsCaCert = val
+			e.SealConfig.TransitConfig.TlsCaCert = val
 		}
-	} else if sealConfig.Type == "gcpckms" {
+	} else if e.SealConfig.Type == "gcpckms" {
 		if val, ok := seal.Config["user_agent"]; ok {
-			sealConfig.GcpCkmsConfig.UserAgent = val
+			e.SealConfig.GcpCkmsConfig.UserAgent = val
 		}
 		if val, ok := seal.Config["credentials"]; ok {
-			sealConfig.GcpCkmsConfig.Credentials = val
+			e.SealConfig.GcpCkmsConfig.Credentials = val
 		}
 		if val, ok := seal.Config["project"]; ok {
-			sealConfig.GcpCkmsConfig.Project = val
+			e.SealConfig.GcpCkmsConfig.Project = val
 		}
 		if val, ok := seal.Config["region"]; ok {
-			sealConfig.GcpCkmsConfig.Region = val
+			e.SealConfig.GcpCkmsConfig.Region = val
 		}
 		if val, ok := seal.Config["key_ring"]; ok {
-			sealConfig.GcpCkmsConfig.KeyRing = val
+			e.SealConfig.GcpCkmsConfig.KeyRing = val
 		}
 		if val, ok := seal.Config["crypto_key"]; ok {
-			sealConfig.GcpCkmsConfig.CryptoKey = val
+			e.SealConfig.GcpCkmsConfig.CryptoKey = val
 		}
-	} else if sealConfig.Type == "azurekeyvault" {
+	} else if e.SealConfig.Type == "azurekeyvault" {
 		if val, ok := seal.Config["tenant_id"]; ok {
-			sealConfig.AzureKeyVaultConfig.TenantID = val
+			e.SealConfig.AzureKeyVaultConfig.TenantID = val
 		}
 		if val, ok := seal.Config["client_id"]; ok {
-			sealConfig.AzureKeyVaultConfig.ClientID = val
+			e.SealConfig.AzureKeyVaultConfig.ClientID = val
 		}
 		if val, ok := seal.Config["client_secret"]; ok {
-			sealConfig.AzureKeyVaultConfig.ClientSecret = val
+			e.SealConfig.AzureKeyVaultConfig.ClientSecret = val
 		}
 		if val, ok := seal.Config["resource"]; ok {
-			sealConfig.AzureKeyVaultConfig.Resource = val
+			e.SealConfig.AzureKeyVaultConfig.Resource = val
 		}
 		if val, ok := seal.Config["vault_name"]; ok {
-			sealConfig.AzureKeyVaultConfig.VaultName = val
+			e.SealConfig.AzureKeyVaultConfig.VaultName = val
 		}
 		if val, ok := seal.Config["key_name"]; ok {
-			sealConfig.AzureKeyVaultConfig.KeyName = val
+			e.SealConfig.AzureKeyVaultConfig.KeyName = val
 		}
-	} else if sealConfig.Type == "awskms" {
+	} else if e.SealConfig.Type == "awskms" {
 		if val, ok := seal.Config["region"]; ok {
-			sealConfig.AwsKmsConfig.Region = val
+			e.SealConfig.AwsKmsConfig.Region = val
 		}
 		if val, ok := seal.Config["endpoint"]; ok {
-			sealConfig.AwsKmsConfig.Endpoint = val
+			e.SealConfig.AwsKmsConfig.Endpoint = val
 		}
 		if val, ok := seal.Config["access_key"]; ok {
-			sealConfig.AwsKmsConfig.AccessKey = val
+			e.SealConfig.AwsKmsConfig.AccessKey = val
 		}
 		if val, ok := seal.Config["secret_key"]; ok {
-			sealConfig.AwsKmsConfig.SecretKey = val
+			e.SealConfig.AwsKmsConfig.SecretKey = val
 		}
 		if val, ok := seal.Config["session_token"]; ok {
-			sealConfig.AwsKmsConfig.SessionToken = val
+			e.SealConfig.AwsKmsConfig.SessionToken = val
 		}
 		if val, ok := seal.Config["shared_creds_filename"]; ok {
-			sealConfig.AwsKmsConfig.SharedCredsFile = val
+			e.SealConfig.AwsKmsConfig.SharedCredsFile = val
 		}
 		if val, ok := seal.Config["shared_creds_profile"]; ok {
-			sealConfig.AwsKmsConfig.SharedCredsProfile = val
+			e.SealConfig.AwsKmsConfig.SharedCredsProfile = val
 		}
 		if val, ok := seal.Config["web_identity_token_file"]; ok {
-			sealConfig.AwsKmsConfig.WebIdentityTokenFile = val
+			e.SealConfig.AwsKmsConfig.WebIdentityTokenFile = val
 		}
 		if val, ok := seal.Config["role_session_name"]; ok {
-			sealConfig.AwsKmsConfig.RoleSessionName = val
+			e.SealConfig.AwsKmsConfig.RoleSessionName = val
 		}
 		if val, ok := seal.Config["role_arn"]; ok {
-			sealConfig.AwsKmsConfig.RoleArn = val
+			e.SealConfig.AwsKmsConfig.RoleArn = val
 		}
 	}
-	e.SealConfig = sealConfig
 
 	// A storage config is needed to determine the BoltDB location
 	if config.Storage == nil {
 		return fmt.Errorf("no storage stanza found in Vault configuration file")
 	}
-	storageConfig := config.Storage.Config
 
-	if val, ok := storageConfig["path"]; ok {
+	if val, ok := config.Storage.Config["path"]; ok {
 		e.BoltDbFile = val + "/vault.db"
 	} else {
 		return fmt.Errorf("no path parameter storage stanza found in Vault configuration file")

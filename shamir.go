@@ -23,14 +23,11 @@ func (e *encryptionData) shamirSplit() error {
 
 	if recovery {
 		shamirBytes, err = shamir.Split(e.RecoveryKey, e.RecoveryConfig.SecretShares, e.RecoveryConfig.SecretThreshold)
-		if err != nil {
-			return fmt.Errorf("failed to create Shamir key shares of recovery key: %v", err)
-		}
 	} else {
 		shamirBytes, err = shamir.Split(e.UnsealKey, e.ShamirConfig.SecretShares, e.ShamirConfig.SecretThreshold)
-		if err != nil {
-			return fmt.Errorf("failed to create Shamir key shares of unseal key: %v", err)
-		}
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create Shamir key shares of %s key: %v", shamirType, err)
 	}
 
 	for idx, keyshare := range shamirBytes {
