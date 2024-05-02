@@ -36,7 +36,7 @@ type encryptionData struct {
 
 func main() {
 	vaultConfigFilePath := flag.String("vaultConfig", "./vault.hcl", "Path to the Vault server configuration file")
-	genRecoveryKeyShares := flag.Bool("genRecoveryKeyShares", false, "Set to true to generate new recovery key shares")
+	genKeyShares := flag.Bool("genKeyShares", false, "Set to true to generate new recovery/unseal key shares, depending on the seal type")
 	printSealConfig := flag.Bool("printSealConfig", false, "Display the seal configuration")
 	printKeyring := flag.Bool("printKeyring", false, "Display the keyring data, including the data encryption keys and root key in base64 format")
 	printRecoveryKey := flag.Bool("printRecoveryKey", false, "Display the recovery key in base64 format")
@@ -108,8 +108,8 @@ func main() {
 		}
 	}
 
-	// Calculate new Shamir key shares of the recovery key
-	if *genRecoveryKeyShares {
+	// Calculate new Shamir key shares of the recovery/unseal key
+	if *genKeyShares {
 		err := e.shamirSplit()
 		if err != nil {
 			log.Fatalf("%v", err)

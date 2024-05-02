@@ -10,7 +10,9 @@ import (
 	"os"
 	"time"
 
+	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
 	bolt "go.etcd.io/bbolt"
+	"google.golang.org/protobuf/proto"
 )
 
 type shamirOrRecoveryConfig struct {
@@ -108,12 +110,12 @@ func copyFile(source string, dest string) error {
 
 func (e *encryptionData) getKeys() error {
 	// Read the root key and keyring ciphers from BoltDB
-	rootKeyCipher, err := boltRead(e.BoltDB, rootKeyPath)
+	rootKeyCiphertext, err := boltRead(e.BoltDB, rootKeyPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
 
-	keyringCipher, err := boltRead(e.BoltDB, keyringPath)
+	keyringCiphertext, err := boltRead(e.BoltDB, keyringPath)
 	if err != nil {
 		return fmt.Errorf("error reading key from boltdb: %v", err)
 	}
@@ -155,20 +157,27 @@ func (e *encryptionData) getKeys() error {
 	}
 
 	// Attempt to decrypt the root key and keyring
-	rootKeyReadBytes, err := e.decryptSeal(rootKeyCipher)
+	rootKeyReadBytes, err := e.decryptSeal(rootKeyCiphertext)
 	if err != nil {
 		return fmt.Errorf("error decrypting root key: %v", err)
 	}
 
 	if e.SealConfig.Type != "shamir" {
-		e.Keyring, err = e.decryptSeal(keyringCipher)
+		e.Keyring, err = e.decryptSeal(keyringCiphertext)
 		if err != nil {
 			return fmt.Errorf("error decrypting keyring: %v", err)
 		}
 	} else {
-		// The keyring ciphertext must be tweaked for Shamir seals
-		lenCipher := len(keyringCipher)
-		e.Keyring = keyringCipher[3 : lenCipher-1]
+		// For Shamir seals, we need to proto unmarshal the raw keyring data and
+		// extract only the relevant ciphertext portion before we hand to decrypt()
+		blobInfo := &wrapping.BlobInfo{}
+		if err := proto.Unmarshal(keyringCiphertext, blobInfo); err != nil {
+			eLen := len(keyringCiphertext)
+			if err := proto.Unmarshal(keyringCiphertext[:eLen-1], blobInfo); err != nil {
+				return fmt.Errorf("failed to proto unmarshal keyring: %s: %v", err, blobInfo)
+			}
+		}
+		e.Keyring = blobInfo.Ciphertext
 	}
 
 	// The seal-decrypted root key is an array of base64-encoded strings,
@@ -182,6 +191,7 @@ func (e *encryptionData) getKeys() error {
 	if err != nil {
 		return fmt.Errorf("failed to encode root key base64: %v", err)
 	}
+	fmt.Println("successfully decrypted root key")
 
 	// Decrypt the keyring using the root key and load into keyringData
 	var decryptedKeyring []byte

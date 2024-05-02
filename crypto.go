@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -144,28 +143,27 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 
 // decrypt uses the provided key to open the ciphertext using AES-GCM
 func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
-	// Initialize
+	// Load the key into an AES cipher
 	aesCipher, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES cipher: %v", err)
 	}
 
+	// Create the GCM from the cipher block
 	gcm, err := cipher.NewGCM(aesCipher)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCM cipher: %v", err)
 	}
 
-	// Cleanup ciphertext (remove newlines)
-	ciphertext = bytes.TrimRight(ciphertext, "\n")
-	ciphertext = bytes.TrimRight(ciphertext, "\r")
-	if len(ciphertext) < gcm.NonceSize() {
+	sz := gcm.NonceSize()
+	if len(ciphertext) < sz {
 		return nil, fmt.Errorf("invalid ciphertext length")
 	}
 
-	// Parse cipher for nonce and primary content
-	sz := gcm.NonceSize()
+	// Parse ciphertext for nonce and secret contents,
+	// exluding the key term (4) and version (+1=5)
 	nonce, raw := ciphertext[5:5+sz], ciphertext[5+sz:]
-	out := make([]byte, 0, len(raw)-gcm.NonceSize())
+	out := make([]byte, 0, len(raw)-sz)
 
 	// Open and decrypt
 	var result []byte

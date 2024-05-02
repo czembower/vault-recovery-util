@@ -3,19 +3,38 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 
 	"github.com/hashicorp/vault/shamir"
 )
 
 func (e *encryptionData) shamirSplit() error {
-	shamirBytes, err := shamir.Split(e.RecoveryKey, e.RecoveryConfig.SecretShares, e.RecoveryConfig.SecretThreshold)
-	if err != nil {
-		log.Fatalf("failed to create Shamir key shares of recovery key: %v", err)
+	var shamirBytes [][]byte
+	var recovery bool
+	var shamirType string
+	var err error
+
+	if e.RecoveryKey == nil {
+		recovery = false
+		shamirType = "unseal"
+	} else {
+		recovery = true
+		shamirType = "recovery"
+	}
+
+	if recovery {
+		shamirBytes, err = shamir.Split(e.RecoveryKey, e.RecoveryConfig.SecretShares, e.RecoveryConfig.SecretThreshold)
+		if err != nil {
+			return fmt.Errorf("failed to create Shamir key shares of recovery key: %v", err)
+		}
+	} else {
+		shamirBytes, err = shamir.Split(e.UnsealKey, e.ShamirConfig.SecretShares, e.ShamirConfig.SecretThreshold)
+		if err != nil {
+			return fmt.Errorf("failed to create Shamir key shares of unseal key: %v", err)
+		}
 	}
 
 	for idx, keyshare := range shamirBytes {
-		fmt.Printf("recovery key share %v: %s\n", idx+1, base64.StdEncoding.EncodeToString(keyshare))
+		fmt.Printf("%s key share %v: %s\n", shamirType, idx+1, base64.StdEncoding.EncodeToString(keyshare))
 	}
 
 	return nil
