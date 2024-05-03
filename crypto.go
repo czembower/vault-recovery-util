@@ -225,19 +225,16 @@ func findDek(ciphertext []byte, keyringData keyringData) ([]byte, error) {
 		return nil, fmt.Errorf("invalid data path requested - no ciphertext found")
 	}
 
-	fmt.Println("parsing ciphertext for associated keyring DEK")
 	term := binary.BigEndian.Uint32(ciphertext[:4])
 	for _, keyInfo := range keyringData.Keys {
 		if uint32(keyInfo.Term) == term {
 			dek = keyInfo.Value
-			fmt.Println("data encryption key:", dek)
-			fmt.Println("key term:", term)
+			fmt.Printf("DEK: %s (term: %v)\n", dek, term)
 		}
 	}
 	if dek == "" {
-		fmt.Println("data encryption key: none found")
-		fmt.Println("key term: none found")
-		return nil, fmt.Errorf("unable to identify a data encryption key associated with this ciphertext")
+		fmt.Println("no DEK associated with this ciphertext")
+		return nil, fmt.Errorf("unable to identify a DEK associated with this ciphertext")
 	}
 
 	keyringKey, err := base64.StdEncoding.DecodeString(dek)
@@ -248,7 +245,7 @@ func findDek(ciphertext []byte, keyringData keyringData) ([]byte, error) {
 	return keyringKey, nil
 }
 
-func attemptDecryption(ciphertext []byte, readPath string, e encryptionData) ([]byte, error) {
+func parseVaultData(ciphertext []byte, readPath string, e encryptionData) ([]byte, error) {
 	// attempt to find the appropriate DEK
 	var secret []byte
 	keyringKey, err := findDek(ciphertext, e.KeyringData)
@@ -259,70 +256,53 @@ func attemptDecryption(ciphertext []byte, readPath string, e encryptionData) ([]
 		if err != nil {
 			return nil, fmt.Errorf("error decrypting readPath with keyring DEK: %v", err)
 		}
-	} else {
-		// If no DEK was found to match the ciphertext (and seal is not Shamir),
-		// assume data is seal-wrapped
-		if e.SealConfig.Type != "shamir" {
-			unwrappedSecret, err := e.decryptSeal(ciphertext)
-			// if that failed, return plain DB key that we started with
-			if err != nil {
-				fmt.Println("wrapped: false (no further decryption required)")
-				secret = ciphertext
-				// if the unwrap via seal device worked, attempt to further decrypt the result using the root key
-			} else {
-				fmt.Println("wrapped: true (further decryption will be attempted)")
-				secret, err = decrypt(unwrappedSecret, e.RootKey, readPath)
-				if err != nil {
-					// if root key decryption failed, try to find a keyring key that matches
-					fmt.Println("root key encryption: false")
-					keyringKey, err := findDek(unwrappedSecret, e.KeyringData)
-					// if that failed, return the unwrapped secret in base64 format
-					if err != nil {
-						fmt.Println("decrypting using seal only")
-						secret = []byte(base64.StdEncoding.EncodeToString(unwrappedSecret))
-					} else {
-						// otherwise, try to decrypt with the found DEK
-						secret, err = decrypt(unwrappedSecret, keyringKey, readPath)
-						if err != nil {
-							return nil, fmt.Errorf("decryption with keyring DEK failed")
-						}
-					}
-				} else {
-					fmt.Println("root key encryption: true")
-				}
-			}
-			// If seal is Shamir, try to protoUnmarshal and decrypt
-		} else {
-			blobInfo, err := protoUnmarshal(ciphertext)
-			if err != nil {
-				// if it wasn't a proto-marshalled value, just try to decrypt with the root key
-				fmt.Println("protocol message: false")
-				secret, err = decrypt(ciphertext, e.RootKey, readPath)
-				if err != nil {
-					// if that fails, return the ciphertext in base64 format
-					fmt.Println("root key encryption: false")
-					fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(ciphertext))
-				}
-			} else {
-				// if protoUnmarhal worked, look for an associated DEK in the keyring
-				fmt.Println("protocol message: true")
-				keyringKey, err := findDek(blobInfo.Ciphertext, e.KeyringData)
-				if err != nil {
-					return nil, fmt.Errorf("error decrypting readPath with keyring DEK: %v", err)
-				}
-				// if we found an associated DEK, decrypt the protocol message with the keyring key
-				secret, err = decrypt(blobInfo.Ciphertext, keyringKey, readPath)
-				if err != nil {
-					fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(ciphertext))
-				}
-			}
-			unsealedSecret, err := decrypt(blobInfo.Ciphertext, e.UnsealKey, readPath)
-			if err != nil {
-				fmt.Println("sealed: false")
-				return ciphertext, nil
-			}
-			fmt.Printf("%s\n:", unsealedSecret)
+		return secret, nil
+	}
+
+	// If no DEK was found to match the ciphertext, assume data is seal-wrapped
+	var unwrappedSecret []byte
+	switch e.SealConfig.Type {
+	case "shamir":
+		blobInfo, err := protoUnmarshal(ciphertext)
+		if err != nil {
+			// if this fails, return the raw ciphertext
+			fmt.Println("unseal key-wrapped: false (no further decryption required)")
+			return ciphertext, nil
+		}
+		// if it succeeds, extract the ciphertext from the blob and continue
+		unwrappedSecret = blobInfo.Ciphertext
+	default:
+		// for KMS seals, decrypt using the unwrapper
+		unwrappedSecret, err = e.decryptSeal(ciphertext)
+		// if this fails, return the raw ciphertext
+		if err != nil {
+			fmt.Println("seal wrapped: false (no further decryption required)")
+			return ciphertext, nil
 		}
 	}
+
+	// if the unwrap via seal device worked, attempt to further decrypt the result
+	// start by trying the root key
+	fmt.Println("wrapped: true (further decryption will be attempted)")
+	secret, err = decrypt(unwrappedSecret, e.RootKey, readPath)
+	if err != nil {
+		// if root key decryption failed, try to find a keyring key that matches
+		fmt.Println("root key encryption: false")
+		keyringKey, err := findDek(unwrappedSecret, e.KeyringData)
+		// if that failed, return the unwrapped secret in base64 format
+		if err != nil {
+			fmt.Println("decrypting using seal only")
+			secret = []byte(base64.StdEncoding.EncodeToString(unwrappedSecret))
+		} else {
+			// otherwise, try to decrypt with the found DEK
+			secret, err = decrypt(unwrappedSecret, keyringKey, readPath)
+			if err != nil {
+				return nil, fmt.Errorf("decryption with keyring DEK failed")
+			}
+		}
+	} else {
+		fmt.Println("root key encryption: true")
+	}
+
 	return secret, nil
 }

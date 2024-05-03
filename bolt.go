@@ -188,21 +188,25 @@ func (e *encryptionData) getKeys() error {
 func getVaultData(e *encryptionData, readPath string) error {
 	// Read from BoltDB and get ciphertext
 	ciphertext, err := boltRead(e.BoltDB, readPath)
-	if err != nil {
+	if err != nil || ciphertext == nil {
 		return fmt.Errorf("error accessing readPath from boltdb: %v", err)
 	}
 
-	secret, err := attemptDecryption(ciphertext, readPath, *e)
+	secret, err := parseVaultData(ciphertext, readPath, *e)
 	if err != nil {
 		return fmt.Errorf("error decrypting data from boltdb: %v", err)
 	}
 
 	if secret != nil {
-		buf := &bytes.Buffer{}
-		if err := json.Indent(buf, secret, "", "  "); err == nil {
-			fmt.Printf("content:\n%s\n", buf)
+		if isASCII(string(secret)) {
+			buf := &bytes.Buffer{}
+			if err := json.Indent(buf, secret, "", "  "); err == nil {
+				fmt.Printf("content:\n%s\n", buf)
+			} else {
+				fmt.Println("content:", string(secret))
+			}
 		} else {
-			fmt.Println("content:\n", string(secret))
+			fmt.Println("content:", base64.StdEncoding.EncodeToString(secret))
 		}
 	}
 	return nil

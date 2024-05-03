@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"unicode"
 
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
 	"google.golang.org/protobuf/proto"
@@ -34,6 +35,16 @@ func copyFile(source string, dest string) error {
 		return err
 	}
 	return nil
+}
+
+func isASCII(s string) bool {
+	for _, c := range s {
+		if c > unicode.MaxASCII {
+			return false
+		}
+	}
+
+	return true
 }
 
 func termEcho(on bool) {
