@@ -2,6 +2,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,8 +13,15 @@ import (
 	"unicode"
 
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
+	"github.com/hashicorp/vault/sdk/helper/compressutil"
+	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"google.golang.org/protobuf/proto"
 )
+
+type VaultDataTable struct {
+	Type    string        `json:"type"`
+	Entries []interface{} `json:"entries"`
+}
 
 func protoUnmarshal(data []byte) (*wrapping.BlobInfo, error) {
 	blobInfo := &wrapping.BlobInfo{}
@@ -95,4 +105,42 @@ func getPassword(prompt string) string {
 		os.Exit(1)
 	}
 	return strings.TrimSpace(text)
+}
+
+func checkCompressed(input []byte) ([]byte, error) {
+	vaultDataTable := &VaultDataTable{}
+	var bytes []byte
+
+	// Check to see if the returned data is compressed or not
+	_, uncompressed, _ := compressutil.Decompress(input)
+	// If the data is compressed, pass it through jsonutil and return the result
+	if !uncompressed {
+		err := jsonutil.DecodeJSON(input, vaultDataTable)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress result: %v", err)
+		}
+		bytes, err = json.Marshal(vaultDataTable)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal decompressed data: %v", err)
+		}
+		return bytes, nil
+	}
+	// if it is not compressed, return an empty result and error
+	return nil, fmt.Errorf("data not compressed")
+}
+
+func checkPem(input []byte) ([]byte, error) {
+	// Check to see if the returned data is an X.509 certificate
+	// If it is, return PEM for convenience
+	cert, err := x509.ParseCertificate(input)
+	if err != nil {
+		return nil, fmt.Errorf("input is not PEM data")
+	}
+
+	publicKeyBlock := pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}
+	certPem := string(pem.EncodeToMemory(&publicKeyBlock))
+	return []byte(certPem), nil
 }

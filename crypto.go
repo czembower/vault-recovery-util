@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/pem"
 	"fmt"
 	"strconv"
 
@@ -17,8 +15,6 @@ import (
 	"github.com/hashicorp/go-kms-wrapping/wrappers/azurekeyvault/v2"
 	"github.com/hashicorp/go-kms-wrapping/wrappers/gcpckms/v2"
 	"github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
-	"github.com/hashicorp/vault/sdk/helper/compressutil"
-	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 )
 
 // decryptSeal uses the auto-unseal device or unseal key to decrypt the provided ciphertext
@@ -182,38 +178,19 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 		return nil, fmt.Errorf("version bytes mis-match")
 	}
 
-	// Check to see if the returned data is compressed or not
-	_, uncompressed, _ := compressutil.Decompress(result)
+	compressed, err := checkCompressed(result)
 	if aadPath != keyringPath {
-		fmt.Printf("compressed: %t\n", !uncompressed)
-	}
-	// If the data is compressed, pass it through jsonutil
-	if !uncompressed {
-		type VaultDataTable struct {
-			Type    string        `json:"type"`
-			Entries []interface{} `json:"entries"`
+		if err == nil {
+			fmt.Println("compressed: true")
+			result = compressed
+		} else {
+			fmt.Println("compressed: false")
 		}
-
-		vaultDataTable := &VaultDataTable{}
-		err := jsonutil.DecodeJSON(result, vaultDataTable)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decompress result: %v", err)
-		}
-		fmt.Printf("decrypted content:\n%s\n", vaultDataTable)
-		return nil, nil
 	}
 
-	// Check to see if the returned data is an X.509 certificate
-	// If it is, return PEM for convenience
-	cert, err := x509.ParseCertificate(result)
+	pem, err := checkPem(result)
 	if err == nil {
-		publicKeyBlock := pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		}
-		certPem := string(pem.EncodeToMemory(&publicKeyBlock))
-		fmt.Printf("decrypted content:\n%s\n", certPem)
-		return nil, nil
+		result = pem
 	}
 
 	return result, nil
