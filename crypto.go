@@ -152,7 +152,7 @@ func decrypt(ciphertext []byte, key []byte, aadPath string) ([]byte, error) {
 	}
 
 	// Parse ciphertext for nonce and secret contents,
-	// exluding the key term (4) and version (+1=5)
+	// excluding the key term (4) and version (+1=5)
 	nonce, raw := ciphertext[5:5+sz], ciphertext[5+sz:]
 	out := make([]byte, 0, len(raw)-sz)
 
