@@ -56,6 +56,7 @@ type awsKmsSealConfig struct {
 	WebIdentityTokenFile string `json:"web_identity_token_file,omitempty"`
 	RoleSessionName      string `json:"role_session_name,omitempty"`
 	RoleArn              string `json:"role_arn,omitempty"`
+	KmsKeyID             string `json:"kms_key_id,omitempty"`
 }
 
 func (e *encryptionData) loadConfig(vaultConfigFile string) error {
@@ -189,6 +190,9 @@ func (e *encryptionData) loadConfig(vaultConfigFile string) error {
 		}
 		if val, ok := seal.Config["role_arn"]; ok {
 			e.SealConfig.AwsKmsConfig.RoleArn = val
+		}
+		if val, ok := seal.Config["kms_key_id"]; ok {
+			e.SealConfig.AwsKmsConfig.KmsKeyID = val
 		}
 	}
 

@@ -86,7 +86,7 @@ func (e *encryptionData) decryptSeal(ciphertext []byte) ([]byte, error) {
 		}
 	case "awskms":
 		wrapper := awskms.NewWrapper()
-		_, err := wrapper.SetConfig(ctx, wrapping.WithKeyId(""), wrapping.WithConfigMap(map[string]string{
+		_, err := wrapper.SetConfig(ctx, wrapping.WithKeyId(e.SealConfig.AwsKmsConfig.KmsKeyID), wrapping.WithConfigMap(map[string]string{
 			"region":                  e.SealConfig.AwsKmsConfig.Region,
 			"endpoint":                e.SealConfig.AwsKmsConfig.Endpoint,
 			"access_key":              e.SealConfig.AwsKmsConfig.AccessKey,
