@@ -144,15 +144,16 @@ func (e *encryptionData) getKeys() error {
 
 	// Load the keyring
 	// For auto-unseal with seal wrap, unwrap the keyring ciphertext
-	if e.SealConfig.Type != "shamir" {
+	if e.SealConfig.Type != "shamir" && e.SealWrap {
 		e.Keyring, err = e.decryptSeal(keyringCiphertext)
 		if err != nil {
 			return fmt.Errorf("error decrypting keyring: %v", err)
 		}
 	} else {
-		// For Shamir seals, the keyring is not wrapped by the unseal key, so we
-		// only need to proto unmarshal the encrypted keyring data and extract the
-		// relevant ciphertext portion before we hand to decrypt()
+		// For Shamir seals (or when seal wrap is disabled), the keyring is not
+		// wrapped by the unseal key, so we only need to proto unmarshal the
+		// encrypted keyring data and extract the relevant ciphertext portion before
+		// we hand to decrypt()
 		blobInfo, err := protoUnmarshal(keyringCiphertext)
 		if err != nil {
 			return fmt.Errorf("%v", err)

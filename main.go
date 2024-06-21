@@ -32,6 +32,7 @@ type encryptionData struct {
 	ShamirConfig   shamirOrRecoveryConfig `json:"shamir_config,omitempty"`
 	RecoveryConfig shamirOrRecoveryConfig `json:"recovery_config,omitempty"`
 	KeyringData    keyringData            `json:"keyring_data,omitempty"`
+	SealWrap       bool                   `json:"seal_wrap,omitempty"`
 }
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	printKeys := flag.Bool("printKeys", false, "Display recovery/unseal key and the keyring data, including the data encryption keys and root key in base64 format")
 	listDb := flag.Bool("listDb", false, "Display the BoltDB database contents")
 	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead")
+	sealWrap := flag.Bool("sealWrap", true, "Set to false to disable seal wrap logic - this is necessary for Vault community edition or if seal wrap is explicitly disabled in Vault Enterprise")
 	flag.Parse()
 
 	if len(os.Args) == 1 {
@@ -53,6 +55,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}
+
+	// Set Seal Wrap flag
+	e.SealWrap = *sealWrap
 
 	// open the Bolt DB
 	db, err := boltOpen(e.BoltDbFile)
