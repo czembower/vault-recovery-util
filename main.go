@@ -41,7 +41,8 @@ func main() {
 	printSealConfig := flag.Bool("printSealConfig", false, "Display the seal configuration")
 	printKeys := flag.Bool("printKeys", false, "Display recovery/unseal key and the keyring data, including the data encryption keys and root key in base64 format")
 	listDb := flag.Bool("listDb", false, "Display the BoltDB database contents")
-	readPath := flag.String("readPath", "", "BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead")
+	readKey := flag.String("readKey", "", "BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead")
+	deleteKey := flag.String("deleteKey", "", "BoltDB path to key that should be deleted")
 	sealWrap := flag.Bool("sealWrap", true, "Set to false to disable seal wrap logic - this is necessary for Vault community edition or if seal wrap is explicitly disabled in Vault Enterprise")
 	flag.Parse()
 
@@ -60,7 +61,7 @@ func main() {
 	e.SealWrap = *sealWrap
 
 	// open the Bolt DB
-	db, err := boltOpen(e.BoltDbFile)
+	db, err := boltOpen(e.BoltDbFile, (*deleteKey == ""))
 	e.BoltDB = db
 	if err != nil {
 		log.Fatalf("error opening database file %s: %v", e.BoltDB, err)
@@ -116,10 +117,18 @@ func main() {
 	}
 
 	// Read an arbitrary path from BoltDB and decrypt using the keyring
-	if *readPath != "" {
-		err = getVaultData(&e, *readPath)
+	if *readKey != "" {
+		err = getVaultData(&e, *readKey)
 		if err != nil {
 			log.Fatalf("error retrieving data from specified path: %v", err)
+		}
+	}
+
+	// Delete a key from BoltDB
+	if *deleteKey != "" {
+		err = boltDelete(e.BoltDB, *deleteKey)
+		if err != nil {
+			log.Fatalf("error deleting key from BoltDB: %v", err)
 		}
 	}
 

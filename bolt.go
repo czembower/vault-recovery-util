@@ -39,12 +39,13 @@ type keyringData struct {
 	} `json:"rotationConfig"`
 }
 
-func boltOpen(dbFile string) (*bolt.DB, error) {
+func boltOpen(dbFile string, readOnly bool) (*bolt.DB, error) {
 	if _, err := os.Stat(dbFile); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("database file not present: %s: %v", dbFile, err)
 	}
+	fmt.Println("DB opened in read-only mode:", readOnly)
 	db, err := bolt.Open(dbFile, 0o600, &bolt.Options{
-		ReadOnly: true,
+		ReadOnly: readOnly,
 		Timeout:  2 * time.Second,
 	})
 	if err != nil {
@@ -87,6 +88,22 @@ func boltList(db *bolt.DB) error {
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
 			fmt.Printf("%s\n", k)
 		}
+		return nil
+	})
+	return err
+}
+
+func boltDelete(db *bolt.DB, boltKey string) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		if b == nil {
+			return fmt.Errorf("bolt DB bucket \"data\" not found")
+		}
+		err := b.Delete([]byte(boltKey))
+		if err != nil {
+			return fmt.Errorf("error deleting key from bolt DB: %v", err)
+		}
+		fmt.Println("key deleted (if it existed)")
 		return nil
 	})
 	return err

@@ -10,20 +10,20 @@ utility. It should only be used for educational or emergency applications.
 
 ```shell
 Usage of vault-recovery-util:
-  -genRecoveryKeyShares
-        Set to true to generate new recovery key shares
-  -listDbKeys
+  -deleteKey string
+        BoltDB path to key that should be deleted
+  -genKeyShares
+        Set to true to generate new recovery/unseal key shares, depending on the seal type
+  -listDb
         Display the BoltDB database contents
-  -printKeyring
-        Display the keyring data, including the data encryption keys and root key in base64 format
-  -printRecoveryKey
-        Display the recovery key in base64 format
+  -printKeys
+        Display recovery/unseal key and the keyring data, including the data encryption keys and root key in base64 format
   -printSealConfig
         Display the seal configuration
-  -printUnsealKey
-        Display the unseal key in base64 format
-  -readPath string
-        BoltDB path to key that should be decrypted and returning in plain text
+  -readKey string
+        BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead
+  -sealWrap
+        Set to false to disable seal wrap logic - this is necessary for Vault community edition or if seal wrap is explicitly disabled in Vault Enterprise (default true)
   -vaultConfig string
         Path to the Vault server configuration file (default "./vault.hcl")
 ```
