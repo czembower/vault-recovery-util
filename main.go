@@ -42,7 +42,7 @@ func main() {
 	printKeys := flag.Bool("printKeys", false, "Display recovery/unseal key and the keyring data, including the data encryption keys and root key in base64 format")
 	listDb := flag.Bool("listDb", false, "Display the BoltDB database contents")
 	readKey := flag.String("readKey", "", "BoltDB path to key that should be decrypted and returned in plain text - if decryption fails, raw DB data will be displayed instead")
-	deleteKey := flag.String("deleteKey", "", "BoltDB path to key that should be deleted")
+	deleteKey := flag.String("deleteKey", "", "BoltDB path to key that should be deleted - NOTE: this will only delete the key in the storage backend that the target node is using - this change will not be replicated to other nodes")
 	sealWrap := flag.Bool("sealWrap", true, "Set to false to disable seal wrap logic - this is necessary for Vault community edition or if seal wrap is explicitly disabled in Vault Enterprise")
 	flag.Parse()
 

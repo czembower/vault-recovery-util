@@ -11,7 +11,7 @@ utility. It should only be used for educational or emergency applications.
 ```shell
 Usage of vault-recovery-util:
   -deleteKey string
-        BoltDB path to key that should be deleted
+        BoltDB path to key that should be deleted - NOTE: this will only delete the key in the storage backend that the target node is using - this change will not be replicated to other nodes
   -genKeyShares
         Set to true to generate new recovery/unseal key shares, depending on the seal type
   -listDb
