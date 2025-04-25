@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type VaultDataTable struct {
+type vaultDataTable struct {
 	Type    string        `json:"type"`
 	Entries []interface{} `json:"entries"`
 }
@@ -108,7 +108,7 @@ func getPassword(prompt string) string {
 }
 
 func checkCompressed(input []byte) ([]byte, error) {
-	vaultDataTable := &VaultDataTable{}
+	vaultDataTable := &vaultDataTable{}
 	var bytes []byte
 
 	// Check to see if the returned data is compressed or not
